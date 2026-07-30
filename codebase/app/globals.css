@@ -354,6 +354,17 @@ select {
   color: #ffffff !important;
 }
 
+.theme-light .web-fallback-button {
+  border-color: #9ccde2 !important;
+  background-color: #eff9fd !important;
+  color: #0876a4 !important;
+}
+
+.theme-light .web-fallback-button:hover {
+  border-color: #3da4cf !important;
+  background-color: #e4f6fd !important;
+}
+
 .theme-light input,
 .theme-light textarea,
 .theme-light select {

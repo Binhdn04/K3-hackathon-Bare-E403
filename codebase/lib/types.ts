@@ -19,6 +19,7 @@ export type ChatContext = {
   slideNumber?: number;
   selectedText?: string;
   scope?: "current_slide" | "entire_document";
+  allowWebFallback?: boolean;
 };
 
 export type LearningDocument = {
@@ -59,6 +60,8 @@ export type ChatMessage = {
   content: string;
   citations?: Citation[];
   sourceLevel?: "selected_text" | "current_slide" | "entire_document" | "other_slides" | "transcript" | "other_materials" | "web";
+  requiresWebFallback?: boolean;
+  fallbackQuestion?: string;
 };
 
 export type QuizOptions = {

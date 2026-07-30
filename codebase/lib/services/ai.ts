@@ -2,9 +2,17 @@ import type { ChatContext, ChatMessage, Citation, Flashcard, QuizOptions, QuizQu
 import { openAI } from "./openai";
 import { retrieve, retrieveForGeneration } from "./retrieval";
 
-const tutorInstructions = `Ban la AI Tutor. Tra loi bang tieng Viet ro rang, ngan gon va chi dua tren SOURCE CONTEXT.
-Khong bo sung kien thuc ben ngoai context. Khi dung mot doan, ghi citation theo nhan da cung cap, vi du [Trang 3].
-Neu context khong du, noi ro dieu gi khong the ket luan.`;
+const tutorInstructions = `Ban la AI Tutor. Chi danh dau answerable=true khi SOURCE CONTEXT chua thong tin truc tiep de tra loi QUESTION.
+Neu cau hoi yeu cau thong tin hien tai, moi nhat, gia ca hoac thoi diem ma context khong co du lieu cap nhat, phai dat answerable=false.
+Khi answerable=true, tra loi bang tieng Viet ro rang, ngan gon va khong bo sung kien thuc ben ngoai context.
+sourceIds chi duoc chua ID cua cac doan truc tiep ho tro cau tra loi. Khong viet [Trang ...] hoac citation vao answer vi giao dien se hien citation tu sourceIds.
+Khi answerable=false, dat answer thanh chuoi rong va sourceIds thanh mang rong.`;
+
+type GroundedAnswer = {
+  answerable: boolean;
+  answer: string;
+  sourceIds: string[];
+};
 
 function contextWithCitations(content: string, citations: Citation[]) {
   const labels = citations.map((citation) => {
@@ -17,27 +25,64 @@ function contextWithCitations(content: string, citations: Citation[]) {
 }
 
 export async function answerQuestion(question: string, context: ChatContext): Promise<ChatMessage> {
+  const conversational = conversationalMessage(question);
+  if (conversational) return conversational;
+
   const found = await retrieve(question, context);
   if (found.isSufficient) {
-    const content = await openAI.createText(tutorInstructions, `QUESTION:\n${question}\n\nSOURCE CONTEXT:\n${contextWithCitations(found.content, found.citations)}`);
-    const citations = found.sourceLevel === "entire_document"
-      ? citationsReferencedByAnswer(content, found.citations)
-      : found.citations;
-    return assistantMessage(content, citations, found.sourceLevel);
+    const validSourceIds = citationSourceIds(found.citations);
+    const grounded = await openAI.createJson<GroundedAnswer>(
+      tutorInstructions,
+      `QUESTION:\n${question}\n\nSOURCE CONTEXT:\n${contextWithCitations(found.content, found.citations)}`,
+      "grounded_tutor_answer",
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["answerable", "answer", "sourceIds"],
+        properties: {
+          answerable: { type: "boolean" },
+          answer: { type: "string" },
+          sourceIds: {
+            type: "array",
+            items: { type: "string", enum: validSourceIds }
+          }
+        }
+      }
+    );
+    const content = cleanTutorAnswer(grounded.answer);
+    const citations = mapTutorCitations(grounded.sourceIds, found.citations);
+    if (grounded.answerable && content && citations.length > 0) {
+      return assistantMessage(content, citations, found.sourceLevel);
+    }
+  }
+
+  if (!context.allowWebFallback) {
+    return webFallbackMessage(question);
   }
 
   const web = await openAI.searchWeb(question);
   const citations: Citation[] = web.sources.map((source, index) => ({
     id: `web-${index}-${source.url}`,
     type: "web",
-    title: `Nguon Internet: ${source.title}`,
+    title: source.title,
     url: source.url
   }));
   return assistantMessage(
-    `Khong tim thay noi dung nay trong hoc lieu. Cau tra loi duoi day su dung nguon Internet.\n\n${web.text}`,
+    web.text,
     citations,
     "web"
   );
+}
+
+function webFallbackMessage(question: string): ChatMessage {
+  return {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: "Không tìm thấy nội dung phù hợp trong học liệu hiện tại. Bạn nên liên hệ Lab Coach hoặc giảng viên để được hỗ trợ thêm. Nếu muốn, bạn có thể cho phép tìm nguồn Internet cho riêng câu hỏi này.",
+    citations: [],
+    requiresWebFallback: true,
+    fallbackQuestion: question
+  };
 }
 
 type GeneratedQuiz = {
@@ -54,14 +99,21 @@ type GeneratedQuiz = {
 };
 
 export async function generateQuiz(options: QuizOptions, context: ChatContext): Promise<QuizQuestion[]> {
+  const requestedCount = Number.isFinite(options.questionCount) ? Math.trunc(options.questionCount) : 1;
+  const normalizedOptions: QuizOptions = {
+    ...options,
+    questionCount: Math.min(10, Math.max(1, requestedCount))
+  };
   const scope = context.scope === "entire_document"
     ? "entire_document"
     : context.selectedText?.trim() ? "selected_text" : "current_slide";
   const found = await retrieveForGeneration(context, scope);
   if (!found.isSufficient) throw new Error("No material is available for this quiz");
+  const validSourceIds = citationSourceIds(found.citations);
+  if (validSourceIds.length === 0) throw new Error("No valid source is available for this quiz");
   const result = await openAI.createJson<GeneratedQuiz>(
     "Tao quiz bang tieng Viet chi tu hoc lieu. Cau hoi phai co dap an ro rang. sourceIds chi chua ID nam trong context.",
-    `OPTIONS: ${JSON.stringify(options)}\n\nCONTEXT:\n${found.content}`,
+    `OPTIONS: ${JSON.stringify(normalizedOptions)}\n\nCONTEXT:\n${found.content}`,
     "quiz",
     {
       type: "object",
@@ -70,21 +122,25 @@ export async function generateQuiz(options: QuizOptions, context: ChatContext): 
       properties: {
         questions: {
           type: "array",
-          minItems: options.questionCount,
-          maxItems: options.questionCount,
+          minItems: normalizedOptions.questionCount,
+          maxItems: normalizedOptions.questionCount,
           items: {
             type: "object",
             additionalProperties: false,
             required: ["type", "prompt", "options", "answer", "referenceAnswer", "rubric", "points", "sourceIds"],
             properties: {
-              type: { type: "string", enum: options.types },
+              type: { type: "string", enum: normalizedOptions.types },
               prompt: { type: "string" },
               options: { type: ["array", "null"], items: { type: "string" } },
               answer: { type: "string" },
               referenceAnswer: { type: ["string", "null"] },
               rubric: { type: ["string", "null"] },
               points: { type: "integer", minimum: 1, maximum: 1 },
-              sourceIds: { type: "array", items: { type: "string" }, minItems: 1 }
+              sourceIds: {
+                type: "array",
+                items: { type: "string", enum: validSourceIds },
+                minItems: 1
+              }
             }
           }
         }
@@ -139,8 +195,10 @@ export async function generateFlashcards(context: ChatContext): Promise<Flashcar
     : context.selectedText ? "selected_text" : "current_slide";
   const found = await retrieveForGeneration(context, scope);
   if (!found.isSufficient) throw new Error("No material is available for flashcards");
+  const validSourceIds = citationSourceIds(found.citations);
+  if (validSourceIds.length === 0) throw new Error("No valid source is available for flashcards");
   const result = await openAI.createJson<{ cards: Array<{ front: string; back: string; sourceId: string }> }>(
-    "Tao 3-6 flashcard bang tieng Viet chi tu context. sourceId phai la ID that trong context.",
+    "Tao dung 5 flashcard bang tieng Viet chi tu context. sourceId phai la ID that trong context.",
     found.content,
     "flashcards",
     {
@@ -150,48 +208,103 @@ export async function generateFlashcards(context: ChatContext): Promise<Flashcar
       properties: {
         cards: {
           type: "array",
-          minItems: 3,
-          maxItems: 6,
+          minItems: 5,
+          maxItems: 5,
           items: {
             type: "object",
             additionalProperties: false,
             required: ["front", "back", "sourceId"],
-            properties: { front: { type: "string" }, back: { type: "string" }, sourceId: { type: "string" } }
+            properties: {
+              front: { type: "string" },
+              back: { type: "string" },
+              sourceId: { type: "string", enum: validSourceIds }
+            }
           }
         }
       }
     }
   );
-  return result.cards.map((card) => ({
-    id: crypto.randomUUID(),
-    front: card.front,
-    back: card.back,
-    source: mapCitations([card.sourceId], found.citations)[0] ?? found.citations[0],
-    status: "new"
-  }));
+  return result.cards.map((card) => {
+    const source = mapCitations([card.sourceId], found.citations)[0];
+    if (!source) throw new Error("Flashcard source validation failed");
+    const flashcard: Flashcard = {
+      id: crypto.randomUUID(),
+      front: card.front,
+      back: card.back,
+      source,
+      status: "new"
+    };
+    return flashcard;
+  });
 }
 
 function mapCitations(ids: string[], citations: Citation[]) {
   const wanted = new Set(ids);
-  const matched = citations.filter((citation) => wanted.has(citation.chunkId ?? citation.id));
-  return matched.length > 0 ? matched : citations.slice(0, 2);
+  return citations.filter((citation) => wanted.has(citation.chunkId ?? citation.id));
 }
 
-function citationsReferencedByAnswer(content: string, citations: Citation[]) {
-  const referencedPages = new Set<number>();
-  for (const match of content.matchAll(/\[Trang\s+([^\]]+)\]/gi)) {
-    for (const page of match[1].match(/\d+/g) ?? []) referencedPages.add(Number(page));
-  }
-
-  const seenPages = new Set<string>();
+function mapTutorCitations(ids: string[], citations: Citation[]) {
+  const wanted = new Set(ids);
+  const seen = new Set<string>();
   return citations.filter((citation) => {
-    const page = citation.slideNumber ?? citation.pageNumber;
-    if (page === undefined || !referencedPages.has(page)) return false;
-    const key = `${citation.documentId ?? ""}:${page}`;
-    if (seenPages.has(key)) return false;
-    seenPages.add(key);
+    if (!wanted.has(citation.chunkId ?? citation.id)) return false;
+    const key = citation.url
+      ?? `${citation.documentId ?? ""}:${citation.slideNumber ?? citation.pageNumber ?? citation.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
+}
+
+function citationSourceIds(citations: Citation[]) {
+  return citations.map((citation) => citation.chunkId ?? citation.id);
+}
+
+function cleanTutorAnswer(content: string) {
+  return content
+    .replace(/\s*\[(?:Trang\s+[^\]]+|Transcript\s+[^\]]+)\]/gi, "")
+    .trim();
+}
+
+function conversationalMessage(question: string): ChatMessage | undefined {
+  const normalized = normalizeIntent(question);
+
+  if (/^(xin chao|chao|chao ban|hello|hi|hey)( ban)?$/.test(normalized)) {
+    return assistantMessage(
+      "Xin chào! Mình là VLearn Tutor. Mình có thể giúp bạn tìm hiểu học liệu, giải đáp câu hỏi, tạo quiz và flashcard.",
+      [],
+      undefined
+    );
+  }
+
+  if (/^(ban la ai|ai la ban|ban ten gi|ban la gi|who are you|what are you)$/.test(normalized)) {
+    return assistantMessage(
+      "Mình là VLearn Tutor, trợ lý AI hỗ trợ bạn học từ tài liệu đang mở. Mình không phải là bot hay agent được mô tả trong slide.",
+      [],
+      undefined
+    );
+  }
+
+  if (/^(cam on|cam on ban|thanks|thank you)$/.test(normalized)) {
+    return assistantMessage("Không có gì! Mình luôn sẵn sàng hỗ trợ bạn học.", [], undefined);
+  }
+
+  if (/^(ok|oki|okay|duoc|hieu roi)$/.test(normalized)) {
+    return assistantMessage("Được nhé! Bạn cứ gửi câu hỏi tiếp theo.", [], undefined);
+  }
+
+  return undefined;
+}
+
+function normalizeIntent(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function assistantMessage(content: string, citations: Citation[], sourceLevel: ChatMessage["sourceLevel"]): ChatMessage {
