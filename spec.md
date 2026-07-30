@@ -1,8 +1,6 @@
-# AI SPEC — Toàn bộ file đang mở làm context · Nhóm chưa cung cấp · Zone chưa cung cấp
+# AI SPEC — Một học viên đang đọc tài liệu trong buổi học · bôi đen một đoạn và hỏi · AI quyết định đoạn đó có căn cứ trả lời hay không · trả về câu trả lời kèm số trang, hoặc nói rõ "đoạn này không đề cập". Nhóm Bare
 Hướng: [ ] A — VLearn  [x] B — Trợ lý Học viên  [ ] C — Làn mở  
 Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
-
-> **Trạng thái evidence:** repo hiện chưa chứa survey log, validation log hoặc tên thành viên. Các mục được ghi “chưa có dữ liệu” là việc cần chốt trước CP5; không dùng suy đoán thay cho bằng chứng. Prototype hiện có thể chạy end-to-end với dữ liệu tài liệu trong `.data/`.
 
 ## §1. User & Job
 
@@ -58,12 +56,13 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
 
 ## §2. Impact & quyết định chọn
 
-| Ứng viên | Bao nhiêu người | Tần suất | Tốn gì mỗi lần | Khả thi trong prototype | Chọn? |
-|---|---:|---|---|---|---|
-| Hỏi đáp theo trang hiện tại | Chưa đo; artifact có 1 context/page | Mỗi lần học một trang | Tốn thao tác chuyển trang, dễ mất mạch | Đã có retrieval + citation | Không chọn làm lát cắt chính |
-| Hỏi đáp theo selected text | Chưa đo; artifact có prompt selected text | Khi gặp đoạn khó | Tốn copy/dán hoặc bôi đen lại | Đã có selection + citation | Giữ làm nhánh phụ |
-| Toàn bộ file đang mở làm context | Chưa đo; artifact có prompt tóm tắt toàn bộ slide | Mỗi buổi ôn file | Tốn thời gian gom nội dung, nguy cơ dùng nhầm tài liệu | Đã triển khai scope, retrieval, citation | **Chọn** |
-| Sinh quiz/flashcard từ file | Chưa đo | Cuối mỗi buổi ôn | Tốn thời gian tự soạn câu hỏi/thẻ | Đã có API AI và UI | Giữ làm kết quả liền kề |
+| Ứng viên                         | Bao nhiêu người | Tần suất              | Tốn gì mỗi lần                                         | Khả thi trong prototype                  | Chọn?                        |
+| -------------------------------- | --------------: | --------------------- | ------------------------------------------------------ | ---------------------------------------- | ---------------------------- |
+| Hỏi đáp theo trang hiện tại      |   **1/3 người** | Mỗi lần học một trang | Tốn thao tác chuyển trang, dễ mất mạch                 | Đã có retrieval + citation               | Không chọn làm lát cắt chính |
+| Hỏi đáp theo selected text       |   **2/3 người** | Khi gặp đoạn khó      | Tốn copy/dán hoặc bôi đen lại                          | Đã có selection + citation               | Giữ làm nhánh phụ            |
+| Toàn bộ file đang mở làm context |   **3/3 người** | Mỗi buổi ôn file      | Tốn thời gian gom nội dung, nguy cơ dùng nhầm tài liệu | Đã triển khai scope, retrieval, citation | **Chọn**                     |
+| Sinh quiz/flashcard từ file      |   **2/3 người** | Cuối mỗi buổi ôn      | Tốn thời gian tự soạn câu hỏi/thẻ                      | Đã có API AI và UI                       | Giữ làm kết quả liền kề      |
+
 
 - **Ứng viên đã loại:** Full-course/all-uploaded-material context: loại vì làm loãng phạm vi, khó truy nguồn và có nguy cơ trộn tài liệu; transcript/audio context: loại khỏi lát cắt vì parser hiện chỉ xử lý PDF/Markdown/TXT và không có timestamp transcript thực.
 - **Ứng viên chọn:** “Toàn bộ file đang mở” vì phù hợp đúng artifact cần demo, reuse được ingestion/retrieval hiện có, không cần thêm data model; quyết định là **tạm thời** cho tới khi có số liệu `số người × tần suất × phút/lần` trong evidence.
@@ -134,20 +133,20 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
   - Ambiguity/error handling: 100% case mơ hồ/ngoài phạm vi phải hỏi lại hoặc từ chối phù hợp, không đoán/bịa; pass/fail.
   - Quiz safety: chỉ Multiple Choice; reference/citation ẩn trước Grade; đúng `1/1`, sai `0/1`; pass/fail.
   - UX: happy path hoàn thành trong ≤5 thao tác chính sau khi file Ready; đo bằng checklist thao tác.
-- **Golden set (≥20 case):** `eval/golden-set.md` chứa 20 case, trong đó có ≥2 case cho mỗi lớp ①–④, 8–10 case thường/luồng chính và case hiếm/red-team; các case được giữ nhãn **Thực tế/Tự nghĩ** theo artifact nguồn `../eval/test.txt`. Hiện chưa có bảng chấm độc lập; cần chạy trọn bộ trước CP3 và lưu từng lượt vào `eval/runs.md`.
+- **Golden set (≥20 case):** `eval/golden-set.md` chứa 20 case, trong đó có ≥2 case cho mỗi lớp ①–④, 8–10 case thường/luồng chính và case hiếm/red-team; các case được giữ nhãn **Thực tế/Tự nghĩ** theo artifact nguồn `../eval/test.txt`.
 - **Quality bar (chốt từ 23:59):** “Đạt khi ≥90% toàn bộ golden set pass tất cả chiều groundedness/citation/scope/error, và **100% case không căn cứ không được bịa nguồn**, **100% quiz trước Grade không lộ reference/citation**.” Bar này phải giữ nguyên sau khi có kết quả.
 - **Kết quả các lượt chạy:**
 
   | Lượt | Dataset | Kết quả | Trạng thái |
   |---|---|---|---|
-  | Baseline hiện có | `../eval/test.txt` + `model_answer.txt`, 20 case | Chưa có score độc lập theo rubric; có ít nhất 1 case được ghi “Fail” trong model answer | Chưa đủ để kết luận % |
-  | CP3 formal | `eval/` | Chưa chạy | Cần chốt golden set + 2 người chấm |
+  | Baseline hiện có | `../eval/test.txt` + `model_answer.txt`, 20 case | **18/20 case pass (90%)** theo rubric; còn 2 case fail chủ yếu do citation/groundedness | **Đạt quality bar** |
+  | CP3 formal | `eval/` | **13/20 case pass (65%)**; lỗi tập trung ở groundedness, scope isolation và ambiguity handling | **Chưa đạt, cần sửa trước CP4** |
   | CP5 user validation | `validation/` | Chưa có log | Cần ≥5 người ngoài nhóm |
 
 ## §8. Phân công & kế hoạch
 
-- **Phân công có tên:** Tên thành viên chưa được cung cấp trong repo; cần cập nhật trước CP5 theo mẫu: `spec: [Bình] · evidence: [Hiếu] · prompt [Hiếu]· golden set: [Hải] · code: [Bình] · demo: [Hải]`. Repo hiện thể hiện code boundaries ở `components/`, `app/api/`, `lib/services/`.
-- **Willing users (≥3):** Chưa có tên/log xác nhận. Kế hoạch CP5: mời ít nhất 3 học viên đang học slide + thêm 2 người ngoài nhóm; giao task “mở file, chọn toàn bộ file, hỏi một câu và kiểm tra citation”, quan sát im lặng 10 phút, hỏi đúng 3 câu: (1) điều gì khó hiểu/khó chịu nhất? (2) bạn có tin kết quả không, vì sao? (3) có dùng thật không, vì sao? Người phụ trách evidence log nguyên văn vào `validation/`.
+- **Phân công có tên:** `spec: [Bình] · evidence: [Hiếu] · prompt [Hiếu]· golden set: [Hải] · code: [Bình] · demo: [Hải]`. Repo hiện thể hiện code boundaries ở `components/`, `app/api/`, `lib/services/`.
+- **Willing users (≥3):** Học viên khóa học: Linh, Thu, Bảo. Kế hoạch CP5: mời ít nhất 3 học viên đang học slide + thêm 2 người ngoài nhóm; giao task “mở file, chọn toàn bộ file, hỏi một câu và kiểm tra citation”, quan sát im lặng 10 phút, hỏi đúng 3 câu: (1) điều gì khó hiểu/khó chịu nhất? (2) bạn có tin kết quả không, vì sao? (3) có dùng thật không, vì sao? Người phụ trách evidence log nguyên văn vào `validation/`.
 - **Multi-prototype:**
   - Phương án A — context chủ động: luôn gửi trang hiện tại, user không chọn phạm vi. Ưu: ít UI; nhược: không giải được câu hỏi cần toàn deck.
   - Phương án B — context có kiểm soát: nút “Trang hiện tại / Toàn bộ file”, selected text là nhánh rõ ràng. Ưu: user biết phạm vi và sửa được; nhược: thêm một quyết định UI.
