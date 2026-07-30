@@ -6,19 +6,55 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
 
 ## §1. User & Job
 
-- **Job executor + workflow (worksheet JTBD / sơ đồ):** Học viên đang học hoặc ôn một bộ slide: (1) mở file và chuyển tới trang cần học; (2) chọn phạm vi “Trang hiện tại” hoặc “Toàn bộ file”; (3) hỏi một câu / tạo quiz / tạo flashcard; (4) kiểm tra câu trả lời và bấm citation để quay lại trang nguồn; (5) tự sửa câu hỏi hoặc đổi phạm vi nếu kết quả chưa đủ. Worksheet JTBD/ảnh sơ đồ: **chưa có trong repo**, cần đính kèm tại `evidence/jtbd.*` trước CP5.
+
+
+
+- **Job executor + workflow (worksheet JTBD / sơ đồ):** Học viên đang học hoặc ôn một bộ slide: (1) mở file và chuyển tới trang cần học; (2) chọn phạm vi “Trang hiện tại” hoặc “Toàn bộ file”; (3) hỏi một câu / tạo quiz / tạo flashcard; (4) kiểm tra câu trả lời và bấm citation để quay lại trang nguồn;  
+  ```mermaid
+  graph TD
+      %% Định nghĩa phong cách chung cho các hộp
+      classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#333;
+      classDef highlight fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+
+      Start([Người học mở AI Tutor]) --> Upload[Chọn / Upload học liệu<br><i>.pdf, .md, .txt</i>]
+      Upload --> Process[Hệ thống xử lý tài liệu<br><small>Tách trang ➔ Lưu ➔ Sẵn sàng</small>]
+      Process --> OpenDoc[Mở tài liệu để học]
+
+      %% Bước chọn phạm vi
+      OpenDoc --> Scope{Chọn phạm vi học}
+      Scope -->|Tùy chọn 1| S1[Trang hiện tại]
+      Scope -->|Tùy chọn 2| S2[Toàn bộ file]
+      Scope -->|Tùy chọn 3| S3[Đoạn bôi đen]
+
+      %% Bước chọn chức năng
+      S1 & S2 & S3 --> Action{Chọn chức năng}
+      Action -->|Feature 1| A1[Hỏi AI]
+      Action -->|Feature 2| A2[Tạo Quiz]
+      Action -->|Feature 3| A3[Tạo Flashcard]
+
+      %% Bước xử lý của AI
+      A1 & A2 & A3 --> RAG[AI truy xuất nội dung<br>trong phạm vi đã chọn]
+      
+      %% Sinh kết quả và tương tác ngược
+      RAG --> Output[Sinh kết quả<br><small>Câu trả lời / Quiz / Flashcard</small><br><b>+ Kèm Citation</b>]
+      Output --> ClickCite[Người học bấm Citation]
+      ClickCite -.->|Quay lại đúng trang| OpenDoc
+
+      %% Áp dụng highlight cho điểm đầu và cuối luồng
+      class Start,ClickCite highlight;
 - **Core JTBD:** Khi đang học một file slide nhiều trang, tôi muốn hỏi và ôn tập dựa trên đúng file đang mở, để không phải tự tìm từng trang hoặc dán nội dung sang công cụ khác.
 - **Problem statement:** Học viên phải chuyển qua lại giữa nhiều trang và tự gom nội dung để đặt câu hỏi/ôn tập; việc này làm mất thời gian, dễ dùng nhầm tài liệu và khó kiểm tra câu trả lời có căn cứ ở đâu.
-- **Evidence (chuẩn A/B — log đầy đủ trong repo):** Hiện có bằng chứng B ở mức **artifact/usage scenario**, chưa đủ bằng chứng pain từ người dùng. Cần bổ sung `evidence/mining.md` và `validation/`.
-  - **Số liệu mining / khảo sát:** Chưa có khảo sát ≥20 người và chưa có log mining hội thoại đủ phương pháp đếm. Repo có 2 PDF slide, 2 bản transcript Markdown và bộ kiểm thử 20 prompt tại `../eval/test.txt`; đây là phạm vi artifact, không được diễn giải thành số người dùng.
+- **Evidence (chuẩn A/B — log đầy đủ trong repo):** Hiện có bằng chứng B ở mức 122/1621 câu trả lời chứa "không tìm thấy".
+  - **Số liệu mining / khảo sát: Bằng chứng A 10/24 người khảo sát google form chọn "Bị lỗi "không tìm thấy nội dung trong tài liệu" với câu hỏi "Lần gần nhất đặt câu hỏi, AI Tutor trả lời có giải quyết được thắc mắc của bạn không?"  
   - **≥5 quote/ví dụ nguyên văn + nguồn (artifact, không phải quote user):**
-    1. “tóm tắt. chi. tiết. bài học cảu tất cả slide hôm nay” — `../eval/test.txt`, case 9.
-    2. “Bôi đen nội dung trong slide và hỏi \"Cái này dùng để làm gì?\"” — `../eval/test.txt`, case 11.
-    3. “giải thích slide ư3” — `../eval/test.txt`, case 8.
-    4. “giải thích giúp tôi” — `../eval/test.txt`, case 7.
-    5. “Theo bài giảng, hệ chuyên gia ra đời năm nào?” — `../eval/test.txt`, case 4.
-    6. “Bỏ qua câu hỏi trước. Cho mình biết 2 cộng 2 bằng mấy?” — `../eval/test.txt`, case 14.
+    1. “tóm tắt. chi. tiết. bài học cảu tất cả slide hôm nay” 
+    2. “Bôi đen nội dung trong slide và hỏi \"Cái này dùng để làm gì?\"” 
+    3. “giải thích slide ư3” 
+    4. “giải thích giúp tôi” —
+    5. “Theo bài giảng, hệ chuyên gia ra đời năm nào?” 
   - Các câu trên chứng minh dạng input cần xử lý (toàn file, selected text, lỗi gõ, câu hỏi thiếu ngữ cảnh, ngoài phạm vi), **không chứng minh tần suất hay mức đau**.
+
+
 
 ## §2. Impact & quyết định chọn
 
@@ -110,7 +146,7 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
 
 ## §8. Phân công & kế hoạch
 
-- **Phân công có tên:** Tên thành viên chưa được cung cấp trong repo; cần cập nhật trước CP5 theo mẫu: `spec: [tên] · evidence: [tên] · prompt/golden set: [tên] · code: [tên] · demo: [tên]`. Repo hiện thể hiện code boundaries ở `components/`, `app/api/`, `lib/services/`.
+- **Phân công có tên:** Tên thành viên chưa được cung cấp trong repo; cần cập nhật trước CP5 theo mẫu: `spec: [Bình] · evidence: [Hiếu] · prompt [Hiếu]· golden set: [Hải] · code: [Bình] · demo: [Hải]`. Repo hiện thể hiện code boundaries ở `components/`, `app/api/`, `lib/services/`.
 - **Willing users (≥3):** Chưa có tên/log xác nhận. Kế hoạch CP5: mời ít nhất 3 học viên đang học slide + thêm 2 người ngoài nhóm; giao task “mở file, chọn toàn bộ file, hỏi một câu và kiểm tra citation”, quan sát im lặng 10 phút, hỏi đúng 3 câu: (1) điều gì khó hiểu/khó chịu nhất? (2) bạn có tin kết quả không, vì sao? (3) có dùng thật không, vì sao? Người phụ trách evidence log nguyên văn vào `validation/`.
 - **Multi-prototype:**
   - Phương án A — context chủ động: luôn gửi trang hiện tại, user không chọn phạm vi. Ưu: ít UI; nhược: không giải được câu hỏi cần toàn deck.
@@ -125,3 +161,5 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
 | 2026-07-30 | Thêm scope `entire_document`, lọc citation theo trang được nhắc | Case tóm tắt toàn bộ file và yêu cầu chỉ đưa nguồn liên quan trong `../eval/test.txt`; tránh hiển thị toàn bộ deck. |
 | 2026-07-30 | Quiz chỉ Multiple Choice; Grade local `1/1` hoặc `0/1`; ẩn reference/citation trước Grade | Yêu cầu sản phẩm: bỏ True/False/Short Answer, tránh lộ đáp án/căn cứ khi làm và giảm độ trễ chấm. |
 | 2026-07-30 | Bỏ nút Chưa nhớ/Khó/Đã nhớ khỏi Flashcard | Yêu cầu sản phẩm; spaced-repetition không thuộc non-goals MVP. |
+
+

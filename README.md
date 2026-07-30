@@ -5,6 +5,11 @@
 - Thời lượng: **1,5 ngày** (một ngày build + một buổi demo)
 - Nhóm: **4-5 người** · zone tối đa 5 nhóm · thi theo lớp
 
+## Tên thành viên & phân công công việc
+**Đoàn Nhật Bình - 2A202602018** - Leader, lên ý tưởng, code, viết spec.  
+**Lê Trung Hiếu - 2A202601917** - khảo sát các bạn học viên, UI, viết evidence.  
+**Bùi Duy Hải - 2A202601878** - check data trong chatlog, tạo data để test, demo.  
+
 ## Bắt đầu từ đâu?
 
 1. Đọc **`01-de-bai.md`** để chọn hướng và hiểu tiêu chí.
