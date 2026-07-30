@@ -47,7 +47,7 @@ async function parsePdf(buffer: Buffer, documentId: string) {
       content: text || "This page does not contain extractable text."
     });
   }
-  return { pages, transcriptText: "" };
+  return { pages };
 }
 
 function parseMarkdown(text: string, documentId: string) {
@@ -56,16 +56,17 @@ function parseMarkdown(text: string, documentId: string) {
   const pageTexts = sections.length > 1 ? sections : chunksOf(cleaned, 1800, 0);
   const pages = pageTexts.map((content, index): DocumentPage => {
     const heading = content.match(/^#{1,3}\s+(.+)$/m)?.[1];
+    const body = heading ? content.replace(/^#{1,3}\s+.*(?:\n|$)/, "").trim() : content;
     return {
       id: crypto.randomUUID(),
       documentId,
       pageNumber: index + 1,
       slideNumber: index + 1,
       title: heading?.trim() || `Section ${index + 1}`,
-      content: content.replace(/^#{1,3}\s+/gm, "").trim()
+      content: body
     };
   });
-  return { pages, transcriptText: cleaned };
+  return { pages };
 }
 
 export async function processUpload(file: File, courseId: string) {
@@ -88,7 +89,7 @@ export async function processUpload(file: File, courseId: string) {
       id: crypto.randomUUID(),
       documentId: id,
       content,
-      type: extension === ".pdf" ? "slide" : "transcript",
+      type: "slide",
       pageNumber: page.pageNumber,
       slideNumber: page.slideNumber
     }))
@@ -106,11 +107,10 @@ export async function processUpload(file: File, courseId: string) {
     courseId,
     title: file.name.replace(/\.[^.]+$/, ""),
     day: "Uploaded",
-    chapter: kind === "pdf" ? "Slides" : "Transcript",
+    chapter: "Tài liệu",
     kind,
     status: "ready",
-    pageCount: parsed.pages.length,
-    transcriptText: parsed.transcriptText
+    pageCount: parsed.pages.length
   };
   await saveProcessedDocument(document, parsed.pages, chunks);
   return document;

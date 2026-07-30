@@ -3,48 +3,47 @@
 import { DocumentReader } from "@/components/DocumentReader";
 import { MaterialsColumn } from "@/components/MaterialsColumn";
 import { TutorPanel } from "@/components/TutorPanel";
-import { courseId, documents as seededDocuments, pages as seededPages } from "@/lib/mock-data";
+import { courseId } from "@/lib/config";
 import type { ChatContext, ChatMessage, Citation, DocumentPage, LearningDocument } from "@/lib/types";
+import { FileUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type PageResponse = { pages: DocumentPage[]; transcript: string; error?: string };
+type PageResponse = { pages: DocumentPage[]; error?: string };
 
 export default function Home() {
-  const readyDocument = seededDocuments.find((document) => document.status === "ready") ?? seededDocuments[0];
-  const [documents, setDocuments] = useState<LearningDocument[]>(seededDocuments);
-  const [activeDocumentId, setActiveDocumentId] = useState(readyDocument.id);
+  const [documents, setDocuments] = useState<LearningDocument[]>([]);
+  const [activeDocumentId, setActiveDocumentId] = useState("");
   const [pagesByDocument, setPagesByDocument] = useState<Record<string, DocumentPage[]>>({});
-  const [transcripts, setTranscripts] = useState<Record<string, string>>({});
   const [pageIndex, setPageIndex] = useState(0);
   const [zoom, setZoom] = useState(1);
-  const [tab, setTab] = useState<"slide" | "transcript">("slide");
   const [selectedText, setSelectedText] = useState("");
+  const [contextScope, setContextScope] = useState<NonNullable<ChatContext["scope"]>>("current_slide");
   const [readerLoading, setReaderLoading] = useState(false);
   const pendingCitation = useRef<{ documentId: string; page?: number }>();
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: "assistant-welcome", role: "assistant", content: "Context hien tai da san sang.", citations: [] }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
-    const seeded = seededPages.reduce<Record<string, DocumentPage[]>>((result, page) => {
-      result[page.documentId] = [...(result[page.documentId] ?? []), page];
-      return result;
-    }, {});
-    setPagesByDocument(seeded);
     void fetch(`/api/documents?courseId=${encodeURIComponent(courseId)}`)
       .then((response) => response.json())
-      .then((result: { documents?: LearningDocument[] }) => result.documents && setDocuments(result.documents))
+      .then((result: { documents?: LearningDocument[] }) => {
+        const loadedDocuments = result.documents ?? [];
+        setDocuments(loadedDocuments);
+        setActiveDocumentId((current) => {
+          if (loadedDocuments.some((document) => document.id === current && document.status === "ready")) return current;
+          return loadedDocuments.find((document) => document.status === "ready")?.id ?? "";
+        });
+      })
       .catch(() => undefined);
   }, []);
 
   const loadDocument = useCallback(async (documentId: string) => {
+    if (!documentId) return;
     setReaderLoading(true);
     try {
       const response = await fetch(`/api/documents/${documentId}/pages`);
       const result = (await response.json()) as PageResponse;
       if (!response.ok) throw new Error(result.error ?? "Cannot load document");
       setPagesByDocument((current) => ({ ...current, [documentId]: result.pages }));
-      setTranscripts((current) => ({ ...current, [documentId]: result.transcript }));
       if (pendingCitation.current?.documentId === documentId) {
         const requestedPage = pendingCitation.current.page;
         const target = result.pages.findIndex((page) => page.slideNumber === requestedPage || page.pageNumber === requestedPage);
@@ -60,21 +59,21 @@ export default function Home() {
     void loadDocument(activeDocumentId);
   }, [activeDocumentId, loadDocument]);
 
-  const activeDocument = documents.find((document) => document.id === activeDocumentId) ?? readyDocument;
+  const activeDocument = documents.find((document) => document.id === activeDocumentId);
   const pages = pagesByDocument[activeDocumentId] ?? [];
   const activePage = pages[pageIndex] ?? pages[0];
   const context: ChatContext = {
     courseId,
-    documentId: activeDocumentId,
+    documentId: activeDocumentId || undefined,
     slideNumber: activePage?.slideNumber,
-    selectedText: selectedText || undefined
+    selectedText: contextScope === "current_slide" ? selectedText || undefined : undefined,
+    scope: contextScope
   };
 
   function selectDocument(documentId: string) {
     setActiveDocumentId(documentId);
     setPageIndex(0);
     setSelectedText("");
-    setTab("slide");
   }
 
   function handleUploaded(document: LearningDocument) {
@@ -89,6 +88,7 @@ export default function Home() {
     }
     const targetDocumentId = citation.documentId ?? activeDocumentId;
     const targetPage = citation.slideNumber ?? citation.pageNumber;
+    if (!targetDocumentId) return;
     if (targetDocumentId !== activeDocumentId || !pagesByDocument[targetDocumentId]) {
       pendingCitation.current = { documentId: targetDocumentId, page: targetPage };
       setActiveDocumentId(targetDocumentId);
@@ -98,45 +98,41 @@ export default function Home() {
       );
       setPageIndex(Math.max(0, targetIndex));
     }
-    setTab(citation.type === "transcript" ? "transcript" : "slide");
-  }
-
-  function handleSelectionAction(action: "ask" | "explain" | "summarize" | "quiz" | "flashcard") {
-    const labels = { ask: "Ask AI", explain: "Explain", summarize: "Summarize", quiz: "Create quiz", flashcard: "Create flashcard" };
-    setMessages((current) => [...current, {
-      id: `selection-${Date.now()}`,
-      role: "assistant",
-      content: `${labels[action]} requested for selected text on Slide ${context.slideNumber}.`,
-      citations: [{
-        id: `selection-citation-${Date.now()}`,
-        type: "slide",
-        title: `Selected text, Slide ${context.slideNumber}`,
-        documentId: context.documentId,
-        pageNumber: activePage?.pageNumber,
-        slideNumber: context.slideNumber
-      }]
-    }]);
   }
 
   return (
     <div className="grid min-h-screen grid-cols-1 overflow-auto lg:h-screen lg:min-h-[760px] lg:grid-cols-[310px_minmax(520px,1fr)_390px] lg:overflow-hidden">
       <MaterialsColumn documents={documents} activeDocumentId={activeDocumentId} onSelect={selectDocument} onUploaded={handleUploaded} />
-      <DocumentReader
-        document={activeDocument}
-        pages={pages}
-        transcript={transcripts[activeDocumentId] ?? activeDocument.transcriptText ?? ""}
-        loading={readerLoading}
-        pageIndex={pageIndex}
-        zoom={zoom}
-        tab={tab}
-        selectedText={selectedText}
-        onPageChange={setPageIndex}
-        onZoomChange={setZoom}
-        onTabChange={setTab}
-        onSelectedText={setSelectedText}
-        onSelectionAction={handleSelectionAction}
+      {activeDocument ? (
+        <DocumentReader
+          document={activeDocument}
+          pages={pages}
+          loading={readerLoading}
+          pageIndex={pageIndex}
+          zoom={zoom}
+          onPageChange={(index) => {
+            setPageIndex(index);
+            setSelectedText("");
+          }}
+          onZoomChange={setZoom}
+          onSelectedText={setSelectedText}
+        />
+      ) : (
+        <main className="flex min-h-[420px] items-center justify-center bg-panel p-8 text-center">
+          <div>
+            <FileUp className="mx-auto mb-3 text-slate-400" size={34} />
+            <h2 className="text-lg font-semibold text-ink">Chưa có tài liệu</h2>
+            <p className="mt-2 text-sm text-slate-500">Tải file lên để xem nội dung và bắt đầu học.</p>
+          </div>
+        </main>
+      )}
+      <TutorPanel
+        context={context}
+        messages={messages}
+        onMessagesChange={setMessages}
+        onOpenCitation={openCitation}
+        onContextScopeChange={setContextScope}
       />
-      <TutorPanel context={context} messages={messages} onMessagesChange={setMessages} onOpenCitation={openCitation} />
     </div>
   );
 }

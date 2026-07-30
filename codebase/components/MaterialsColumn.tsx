@@ -1,6 +1,7 @@
 "use client";
 
 import type { LearningDocument } from "@/lib/types";
+import { courseId } from "@/lib/config";
 import { FileText, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -33,7 +34,7 @@ export function MaterialsColumn({ documents, activeDocumentId, onSelect, onUploa
     setError("");
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("courseId", "course-ai-product-k3");
+    formData.append("courseId", courseId);
     try {
       const response = await fetch("/api/documents/upload", { method: "POST", body: formData });
       const result = (await response.json()) as LearningDocument & { error?: string };

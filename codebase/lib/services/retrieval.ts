@@ -4,7 +4,7 @@ import type { ChatContext, Citation, DocumentChunk } from "../types";
 import { openAI } from "./openai";
 import { readStore } from "./store";
 
-export type SourceLevel = "selected_text" | "current_slide" | "transcript" | "other_materials" | "web";
+export type SourceLevel = "selected_text" | "current_slide" | "entire_document" | "transcript" | "other_materials" | "web";
 
 export type RetrievalResult = {
   isSufficient: boolean;
@@ -62,11 +62,37 @@ function citationFor(chunk: DocumentChunk, title: string): Citation {
     id: `citation-${chunk.id}`,
     chunkId: chunk.id,
     type: chunk.type,
-    title: chunk.type === "transcript" ? `${title} - transcript` : `Slide ${chunk.slideNumber ?? chunk.pageNumber}: ${title}`,
+    title: chunk.type === "transcript" ? `${title} - transcript` : `Trang ${chunk.slideNumber ?? chunk.pageNumber}: ${title}`,
     documentId: chunk.documentId,
     pageNumber: chunk.pageNumber,
     slideNumber: chunk.slideNumber
   };
+}
+
+function documentResult(chunks: DocumentChunk[], store: Awaited<ReturnType<typeof readStore>>): RetrievalResult {
+  const documents = new Map(store.documents.map((document) => [document.id, document]));
+  const pages = new Map(store.pages.map((page) => [`${page.documentId}:${page.pageNumber}`, page]));
+  return {
+    isSufficient: chunks.length > 0,
+    sourceLevel: "entire_document",
+    content: chunks.map((chunk) => `[${chunk.id}] ${chunk.content}`).join("\n\n"),
+    citations: chunks.map((chunk) =>
+      citationFor(chunk, pages.get(`${chunk.documentId}:${chunk.pageNumber}`)?.title ?? documents.get(chunk.documentId)?.title ?? "Tai lieu")
+    )
+  };
+}
+
+function chunksForDocumentContext(
+  context: ChatContext,
+  store: Awaited<ReturnType<typeof readStore>>
+) {
+  const belongsToCourse = store.documents.some(
+    (document) => document.id === context.documentId && document.courseId === context.courseId
+  );
+  if (!belongsToCourse) return [];
+  return store.chunks.filter(
+    (chunk) => chunk.documentId === context.documentId && chunk.type === "slide"
+  );
 }
 
 async function rank(query: string, chunks: DocumentChunk[], limit = 4) {
@@ -101,6 +127,12 @@ async function resultFor(query: string, chunks: DocumentChunk[], sourceLevel: So
 }
 
 export async function retrieve(question: string, context: ChatContext): Promise<RetrievalResult> {
+  if (context.scope === "entire_document" && context.documentId) {
+    const store = await readStore();
+    const documentChunks = chunksForDocumentContext(context, store);
+    return documentResult(documentChunks, store);
+  }
+
   const selectedText = context.selectedText?.trim();
   if (selectedText && selectedText.length >= 12) {
     return {
@@ -110,7 +142,7 @@ export async function retrieve(question: string, context: ChatContext): Promise<
       citations: [{
         id: `selected-${context.documentId}-${context.slideNumber}`,
         type: "slide",
-        title: `Selected text, Slide ${context.slideNumber ?? "?"}`,
+        title: `Đoạn đã chọn, trang ${context.slideNumber ?? "?"}`,
         documentId: context.documentId,
         pageNumber: context.slideNumber,
         slideNumber: context.slideNumber
@@ -141,24 +173,38 @@ export async function retrieve(question: string, context: ChatContext): Promise<
   return { isSufficient: false, sourceLevel: "web", content: "", citations: [] };
 }
 
-export async function retrieveForGeneration(context: ChatContext, scope: string): Promise<RetrievalResult> {
+export async function retrieveForGeneration(context: ChatContext, scope: "selected_text" | "current_slide" | "entire_document"): Promise<RetrievalResult> {
   const store = await readStore();
-  if (scope === "selected_text" && context.selectedText?.trim()) return retrieve("", context);
-  let chunks = store.chunks.filter((chunk) => chunk.documentId === context.documentId);
-  if (scope === "current_slide") chunks = chunks.filter((chunk) => chunk.slideNumber === context.slideNumber);
-  if (scope === "transcript") chunks = chunks.filter((chunk) => chunk.type === "transcript");
-  if (scope === "slide_range") {
-    chunks = chunks.filter((chunk) => chunk.type === "slide" && Math.abs((chunk.slideNumber ?? 0) - (context.slideNumber ?? 0)) <= 2);
+  if (scope === "entire_document" && context.documentId) {
+    const chunks = chunksForDocumentContext(context, store);
+    return documentResult(chunks, store);
   }
-  if (chunks.length === 0) {
-    chunks = store.chunks.filter((chunk) => store.documents.some((doc) => doc.id === chunk.documentId && doc.courseId === context.courseId));
+  const selectedText = context.selectedText?.trim();
+  if (scope === "selected_text" && selectedText) {
+    return {
+      isSufficient: true,
+      sourceLevel: "selected_text",
+      content: `[selected-text] ${selectedText}`,
+      citations: [{
+        id: `selected-${context.documentId}-${context.slideNumber}`,
+        chunkId: "selected-text",
+        type: "slide",
+        title: `Đoạn đã chọn, trang ${context.slideNumber ?? "?"}`,
+        documentId: context.documentId,
+        pageNumber: context.slideNumber,
+        slideNumber: context.slideNumber
+      }]
+    };
   }
+  const chunks = store.chunks.filter(
+    (chunk) => chunk.documentId === context.documentId && chunk.slideNumber === context.slideNumber
+  );
   const limited = chunks.slice(0, 18);
   const documents = new Map(store.documents.map((doc) => [doc.id, doc]));
   const pages = new Map(store.pages.map((page) => [`${page.documentId}:${page.pageNumber}`, page]));
   return {
     isSufficient: limited.length > 0,
-    sourceLevel: scope === "transcript" ? "transcript" : "current_slide",
+    sourceLevel: "current_slide",
     content: limited.map((chunk) => `[${chunk.id}] ${chunk.content}`).join("\n\n"),
     citations: limited.slice(0, 6).map((chunk) =>
       citationFor(chunk, pages.get(`${chunk.documentId}:${chunk.pageNumber}`)?.title ?? documents.get(chunk.documentId)?.title ?? "Tai lieu")

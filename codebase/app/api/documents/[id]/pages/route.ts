@@ -8,7 +8,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   try {
     const document = await getDocument(params.id);
     if (!document) return NextResponse.json({ error: "Document not found" }, { status: 404 });
-    return NextResponse.json({ documentId: params.id, transcript: document.transcriptText ?? "", pages: await getDocumentPages(params.id) });
+    return NextResponse.json({ documentId: params.id, pages: await getDocumentPages(params.id) });
   } catch (error) {
     return apiError(error);
   }

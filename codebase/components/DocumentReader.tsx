@@ -1,23 +1,25 @@
 "use client";
 
 import type { DocumentPage, LearningDocument } from "@/lib/types";
-import { ChevronLeft, ChevronRight, Search, ZoomIn, ZoomOut } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useEffect } from "react";
+import { MarkdownContent } from "./MarkdownContent";
+
+const PdfDocumentView = dynamic(
+  () => import("./PdfDocumentView").then((module) => module.PdfDocumentView),
+  { ssr: false }
+);
 
 type Props = {
   document: LearningDocument;
   pages: DocumentPage[];
   pageIndex: number;
   zoom: number;
-  tab: "slide" | "transcript";
-  selectedText?: string;
-  transcript: string;
   loading?: boolean;
   onPageChange: (index: number) => void;
   onZoomChange: (zoom: number) => void;
-  onTabChange: (tab: "slide" | "transcript") => void;
   onSelectedText: (text: string) => void;
-  onSelectionAction: (action: "ask" | "explain" | "summarize" | "quiz" | "flashcard") => void;
 };
 
 export function DocumentReader({
@@ -25,24 +27,30 @@ export function DocumentReader({
   pages,
   pageIndex,
   zoom,
-  tab,
-  selectedText,
-  transcript,
   loading,
   onPageChange,
   onZoomChange,
-  onTabChange,
-  onSelectedText,
-  onSelectionAction
+  onSelectedText
 }: Props) {
-  const [showMenu, setShowMenu] = useState(false);
   const page = pages[pageIndex] ?? pages[0];
-  const transcriptParagraphs = useMemo(() => transcript.split(/\n\n+/).filter(Boolean), [transcript]);
+
+  useEffect(() => {
+    return () => persistentHighlights()?.delete("selected-context");
+  }, [document.id, pageIndex]);
 
   function captureSelection() {
-    const selection = window.getSelection()?.toString().trim() ?? "";
-    onSelectedText(selection);
-    setShowMenu(selection.length > 0);
+    const selection = window.getSelection();
+    const text = selection?.toString().trim() ?? "";
+    const highlights = persistentHighlights();
+    const HighlightConstructor = (window as unknown as {
+      Highlight?: new (...ranges: Range[]) => unknown;
+    }).Highlight;
+
+    highlights?.delete("selected-context");
+    if (text && selection?.rangeCount && HighlightConstructor) {
+      highlights?.set("selected-context", new HighlightConstructor(selection.getRangeAt(0).cloneRange()));
+    }
+    onSelectedText(text);
   }
 
   return (
@@ -53,18 +61,6 @@ export function DocumentReader({
           <p className="text-xs text-slate-500">{document.chapter}</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-md border border-line bg-white p-0.5">
-            {(["slide", "transcript"] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => onTabChange(item)}
-                className={`rounded px-3 py-1.5 text-sm ${tab === item ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-100"}`}
-              >
-                {item === "slide" ? "Slide" : "Transcript"}
-              </button>
-            ))}
-          </div>
           <button
             type="button"
             onClick={() => onZoomChange(Math.max(0.75, zoom - 0.1))}
@@ -85,51 +81,25 @@ export function DocumentReader({
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-auto p-5">
-        {showMenu && selectedText ? (
-          <div className="sticky top-0 z-10 mb-3 inline-flex flex-wrap gap-1 rounded-md border border-line bg-white p-1 shadow-soft">
-            {[
-              ["ask", "Ask AI"],
-              ["explain", "Explain"],
-              ["summarize", "Summarize"],
-              ["quiz", "Create quiz"],
-              ["flashcard", "Create flashcard"]
-            ].map(([action, label]) => (
-              <button
-                key={action}
-                type="button"
-                onClick={() => onSelectionAction(action as "ask" | "explain" | "summarize" | "quiz" | "flashcard")}
-                className="rounded px-2.5 py-1.5 text-xs font-medium hover:bg-emerald-50 hover:text-brand"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
+      <div className="min-h-0 flex-1 overflow-auto p-5">
         <article
           onMouseUp={captureSelection}
-          className="mx-auto min-h-[620px] max-w-4xl rounded-md border border-line bg-white p-8 shadow-soft"
-          style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
+          className={`mx-auto min-h-[620px] rounded-md border border-line bg-white shadow-soft ${document.kind === "pdf" ? "flex w-fit justify-center overflow-visible" : "max-w-4xl overflow-hidden p-8"}`}
+          style={document.kind === "pdf" ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top center" }}
         >
-          {loading ? <p className="text-sm text-slate-500">Loading document...</p> : tab === "slide" ? (
-            <div className="flex min-h-[540px] flex-col">
-              <div className="mb-8 flex items-center justify-between border-b border-line pb-4">
-                <span className="rounded bg-emerald-100 px-3 py-1 text-sm font-medium text-brand">Slide {page?.slideNumber ?? 1}</span>
-                <Search size={18} className="text-slate-400" />
-              </div>
-              <h2 className="text-3xl font-semibold leading-tight text-ink">{page?.title}</h2>
-              <p className="mt-8 text-xl leading-9 text-slate-700">{page?.content}</p>
-              <div className="mt-auto border-t border-line pt-4 text-sm text-slate-500">{document.kind.toUpperCase()} · {page?.title}</div>
+          {loading ? (
+            <p className="text-sm text-slate-500">Đang tải tài liệu...</p>
+          ) : page && document.kind === "pdf" ? (
+            <PdfDocumentView documentId={document.id} pageNumber={page.pageNumber} zoom={zoom} />
+          ) : page && document.kind === "markdown" ? (
+            <div>
+              <h1 className="mb-6 text-3xl font-semibold text-ink">{page.title}</h1>
+              <MarkdownContent content={page.content} />
             </div>
+          ) : page ? (
+            <div className="prose max-w-none"><h2>{page.title}</h2><p className="whitespace-pre-wrap leading-8">{page.content}</p></div>
           ) : (
-            <div className="prose max-w-none">
-              <h2>Transcript - {document.chapter}</h2>
-              {transcriptParagraphs.length === 0 ? <p>No transcript was parsed for this document.</p> : null}
-              {transcriptParagraphs.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
-            </div>
+            <p className="text-sm text-slate-500">File này không có nội dung có thể hiển thị.</p>
           )}
         </article>
       </div>
@@ -142,10 +112,10 @@ export function DocumentReader({
           className="inline-flex items-center gap-2 rounded border border-line px-3 py-2 text-sm disabled:opacity-40"
         >
           <ChevronLeft size={16} />
-          Previous
+          Trước
         </button>
         <span className="text-sm text-slate-600">
-          Page {pageIndex + 1} / {Math.max(1, pages.length)}
+          Trang {pageIndex + 1} / {Math.max(1, pages.length)}
         </span>
         <button
           type="button"
@@ -153,10 +123,16 @@ export function DocumentReader({
           disabled={pageIndex >= pages.length - 1}
           className="inline-flex items-center gap-2 rounded border border-line px-3 py-2 text-sm disabled:opacity-40"
         >
-          Next
+          Sau
           <ChevronRight size={16} />
         </button>
       </div>
     </main>
   );
+}
+
+function persistentHighlights() {
+  return (CSS as unknown as {
+    highlights?: { set: (name: string, highlight: unknown) => void; delete: (name: string) => void };
+  }).highlights;
 }

@@ -2,7 +2,6 @@ import "server-only";
 
 import { promises as fs } from "fs";
 import path from "path";
-import { documents as seedDocuments, pages as seedPages, transcriptSegments } from "../mock-data";
 import type { DocumentChunk, DocumentPage, LearningDocument } from "../types";
 
 type DemoStore = {
@@ -14,53 +13,40 @@ type DemoStore = {
 const dataDir = path.join(process.cwd(), ".data");
 const storePath = path.join(dataDir, "store.json");
 export const uploadDir = path.join(dataDir, "uploads");
+const legacyDemoDocumentIds = new Set([
+  "doc-day2-business-problem",
+  "doc-day2-metrics",
+  "doc-foundation-llm",
+  "doc-transformer-attention"
+]);
 
-function seedStore(): DemoStore {
-  const transcriptByDocument = new Map<string, string[]>();
-  for (const segment of transcriptSegments) {
-    const values = transcriptByDocument.get(segment.documentId) ?? [];
-    values.push(segment.text);
-    transcriptByDocument.set(segment.documentId, values);
-  }
-  return {
-    documents: seedDocuments.map((document) => ({
-      ...document,
-      transcriptText: transcriptByDocument.get(document.id)?.join("\n\n") ?? ""
-    })),
-    pages: seedPages,
-    chunks: [
-      ...seedPages.map((page) => ({
-        id: `chunk-${page.id}`,
-        documentId: page.documentId,
-        content: page.content,
-        type: "slide" as const,
-        pageNumber: page.pageNumber,
-        slideNumber: page.slideNumber
-      })),
-      ...transcriptSegments.map((segment) => ({
-        id: `chunk-${segment.id}`,
-        documentId: segment.documentId,
-        content: segment.text,
-        type: "transcript" as const,
-        startTime: segment.start,
-        endTime: segment.end
-      }))
-    ]
-  };
-}
+const emptyStore = (): DemoStore => ({ documents: [], pages: [], chunks: [] });
 
 async function ensureStore() {
   await fs.mkdir(uploadDir, { recursive: true });
   try {
     await fs.access(storePath);
   } catch {
-    await fs.writeFile(storePath, JSON.stringify(seedStore(), null, 2), "utf8");
+    await fs.writeFile(storePath, JSON.stringify(emptyStore(), null, 2), "utf8");
   }
 }
 
 export async function readStore(): Promise<DemoStore> {
   await ensureStore();
-  return JSON.parse(await fs.readFile(storePath, "utf8")) as DemoStore;
+  const store = JSON.parse(await fs.readFile(storePath, "utf8")) as DemoStore;
+  const cleanedStore: DemoStore = {
+    documents: store.documents.filter((document) => !legacyDemoDocumentIds.has(document.id)),
+    pages: store.pages.filter((page) => !legacyDemoDocumentIds.has(page.documentId)),
+    chunks: store.chunks
+      .filter((chunk) => !legacyDemoDocumentIds.has(chunk.documentId))
+      .map((chunk) => ({ ...chunk, type: "slide" }))
+  };
+  const changed = cleanedStore.documents.length !== store.documents.length
+    || cleanedStore.pages.length !== store.pages.length
+    || cleanedStore.chunks.length !== store.chunks.length
+    || store.chunks.some((chunk) => chunk.type !== "slide");
+  if (changed) await writeStore(cleanedStore);
+  return cleanedStore;
 }
 
 export async function writeStore(store: DemoStore) {
@@ -85,6 +71,13 @@ export async function getDocumentPages(documentId: string) {
   return store.pages
     .filter((page) => page.documentId === documentId)
     .sort((a, b) => a.pageNumber - b.pageNumber);
+}
+
+export async function getUploadedFile(documentId: string) {
+  await ensureStore();
+  const fileName = (await fs.readdir(uploadDir)).find((name) => name.startsWith(`${documentId}-`));
+  if (!fileName) return undefined;
+  return { fileName, path: path.join(uploadDir, fileName) };
 }
 
 export async function saveProcessedDocument(document: LearningDocument, pages: DocumentPage[], chunks: DocumentChunk[]) {

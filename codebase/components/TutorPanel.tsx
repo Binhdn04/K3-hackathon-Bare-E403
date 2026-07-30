@@ -2,7 +2,7 @@
 
 import { CitationList } from "@/components/CitationList";
 import type { ChatContext, ChatMessage, Citation, Flashcard, QuizOptions, QuizQuestion } from "@/lib/types";
-import { BookOpen, CheckCircle2, MessageSquareText, RotateCcw, Send, Sparkles } from "lucide-react";
+import { BookOpen, LoaderCircle, MessageSquareText, Send, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type Props = {
@@ -10,38 +10,37 @@ type Props = {
   messages: ChatMessage[];
   onMessagesChange: (messages: ChatMessage[]) => void;
   onOpenCitation: (citation: Citation) => void;
+  onContextScopeChange: (scope: NonNullable<ChatContext["scope"]>) => void;
 };
 
-type Tab = "tutor" | "quiz" | "summary" | "flashcard";
+type Tab = "tutor" | "quiz" | "flashcard";
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: "tutor", label: "Tutor" },
   { id: "quiz", label: "Quiz" },
-  { id: "summary", label: "Summary" },
   { id: "flashcard", label: "Flashcard" }
 ];
 
-export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation }: Props) {
+export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation, onContextScopeChange }: Props) {
   const [tab, setTab] = useState<Tab>("tutor");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
   const [error, setError] = useState("");
   const [quiz, setQuiz] = useState<QuizQuestion[]>([]);
-  const [quizSource, setQuizSource] = useState<QuizOptions["source"]>("current_slide");
   const [questionCount, setQuestionCount] = useState(4);
   const [difficulty, setDifficulty] = useState<QuizOptions["difficulty"]>("medium");
-  const [includeTranscript, setIncludeTranscript] = useState(true);
-  const [quizTypes, setQuizTypes] = useState<QuizOptions["types"]>(["multiple_choice", "true_false", "short_answer"]);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [grades, setGrades] = useState<Record<string, { score: number; maxScore: number; feedback: { correct: string; missing: string } }>>({});
-  const [summary, setSummary] = useState<{ bullets: string[]; citations: Citation[] } | null>(null);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [flipped, setFlipped] = useState<Record<string, boolean>>({});
   const contextLabel = useMemo(() => {
-    if (context.selectedText && context.slideNumber) return `Selected text, Slide ${context.slideNumber}`;
-    if (context.slideNumber) return `Slide ${context.slideNumber}`;
-    return "Course";
-  }, [context.selectedText, context.slideNumber]);
+    if (context.scope === "entire_document") return "Toàn bộ file đang mở";
+    if (context.selectedText && context.slideNumber) return `Đoạn đã chọn, trang ${context.slideNumber}`;
+    if (context.slideNumber) return `Trang ${context.slideNumber}`;
+    return "Chưa có tài liệu";
+  }, [context.scope, context.selectedText, context.slideNumber]);
 
   async function postJson<T>(url: string, body: unknown): Promise<T> {
     const response = await fetch(url, {
@@ -73,55 +72,53 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
   }
 
   async function generateQuiz() {
-    setLoading(true);
+    setGeneratingQuiz(true);
     setError("");
     const options: QuizOptions = {
       questionCount,
       difficulty,
-      types: quizTypes.length > 0 ? quizTypes : ["multiple_choice"],
-      includeTranscript,
-      source: context.selectedText ? quizSource : quizSource === "selected_text" ? "current_slide" : quizSource
+      types: ["multiple_choice"]
     };
     try {
       const result = await postJson<{ questions: QuizQuestion[] }>("/api/quiz/generate", { options, context });
       setQuiz(result.questions);
+      setQuizAnswers({});
+      setGrades({});
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Quiz generation failed");
     } finally {
-      setLoading(false);
+      setGeneratingQuiz(false);
     }
   }
 
-  async function gradeQuestion(question: QuizQuestion) {
+  function gradeQuestion(question: QuizQuestion) {
     const answer = quizAnswers[question.id];
     if (!answer) return;
-    setError("");
-    try {
-      const result = await postJson<{ score: number; maxScore: number; feedback: { correct: string; missing: string } }>("/api/quiz/grade", { answer, question });
-      setGrades((current) => ({ ...current, [question.id]: result }));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Grading failed");
-    }
+    const correct = isCorrectMultipleChoice(answer, question.answer, question.options ?? []);
+    setGrades((current) => ({
+      ...current,
+      [question.id]: {
+        score: correct ? 1 : 0,
+        maxScore: 1,
+        feedback: {
+          correct: correct ? "Chính xác." : `Đáp án đúng: ${question.answer}`,
+          missing: correct ? "Không có nội dung còn thiếu." : "Hãy xem lại đáp án và tài liệu tham khảo bên dưới."
+        }
+      }
+    }));
   }
 
-  function toggleQuizType(type: QuizOptions["types"][number]) {
-    setQuizTypes((current) => (current.includes(type) ? current.filter((item) => item !== type) : [...current, type]));
-  }
-
-  async function generateSummary(kind: string) {
-    setLoading(true);
-    setError("");
-    try {
-      setSummary(await postJson<{ bullets: string[]; citations: Citation[] }>("/api/summary/generate", { kind, context }));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Summary generation failed");
-    } finally {
-      setLoading(false);
-    }
+  function selectQuizAnswer(questionId: string, answer: string) {
+    setQuizAnswers((current) => ({ ...current, [questionId]: answer }));
+    setGrades((current) => {
+      const next = { ...current };
+      delete next[questionId];
+      return next;
+    });
   }
 
   async function generateFlashcards() {
-    setLoading(true);
+    setGeneratingFlashcards(true);
     setError("");
     try {
       const result = await postJson<{ flashcards: Flashcard[] }>("/api/flashcards/generate", { context });
@@ -129,14 +126,14 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Flashcard generation failed");
     } finally {
-      setLoading(false);
+      setGeneratingFlashcards(false);
     }
   }
 
   return (
     <aside className="flex h-full min-h-0 flex-col border-l border-line bg-white">
       <div className="border-b border-line px-4 py-4">
-        <div className="mb-3 grid grid-cols-4 gap-1 rounded-md bg-slate-100 p-1">
+        <div className="mb-3 grid grid-cols-3 gap-1 rounded-md bg-slate-100 p-1">
           {tabs.map((item) => (
             <button
               key={item.id}
@@ -149,8 +146,31 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
           ))}
         </div>
         <p className="rounded border border-line bg-panel px-3 py-2 text-sm">
-          <span className="font-medium">Context:</span> {contextLabel}
+          <span className="font-medium">Ngữ cảnh:</span> {contextLabel}
         </p>
+        <div className="mt-2 grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1" aria-label="Phạm vi ngữ cảnh">
+          <button
+            type="button"
+            onClick={() => onContextScopeChange("current_slide")}
+            className={`rounded px-2 py-1.5 text-xs font-medium ${context.scope !== "entire_document" ? "bg-white text-brand shadow-sm" : "text-slate-600"}`}
+          >
+            Trang hiện tại
+          </button>
+          <button
+            type="button"
+            onClick={() => onContextScopeChange("entire_document")}
+            disabled={!context.documentId}
+            className={`rounded px-2 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${context.scope === "entire_document" ? "bg-white text-brand shadow-sm" : "text-slate-600"}`}
+          >
+            Toàn bộ file
+          </button>
+        </div>
+        {generatingQuiz || generatingFlashcards ? (
+          <p role="status" className="mt-2 flex items-center gap-2 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
+            <LoaderCircle className="animate-spin" size={15} />
+            {generatingQuiz ? "Hệ thống đang tạo quiz..." : "Hệ thống đang tạo flashcard..."}
+          </p>
+        ) : null}
         {error ? <p className="mt-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
       </div>
 
@@ -174,23 +194,12 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
 
         {tab === "quiz" ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ["selected_text", "Selected text"],
-                ["current_slide", "Current slide"],
-                ["slide_range", "Slide range"],
-                ["transcript", "Transcript"],
-                ["full_lesson", "Full lesson"]
-              ].map(([source, label]) => (
-                <button
-                  key={source}
-                  type="button"
-                  onClick={() => setQuizSource(source as QuizOptions["source"])}
-                  className={`rounded border px-3 py-2 text-sm ${quizSource === source ? "border-brand bg-emerald-50 text-brand" : "border-line hover:border-brand"}`}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              {context.scope === "entire_document"
+                ? "Quiz sẽ dùng toàn bộ file đang mở làm ngữ cảnh."
+                : context.selectedText
+                ? "Quiz sẽ dùng đoạn văn bản bạn đang bôi đen làm ngữ cảnh."
+                : "Quiz sẽ dùng trang hiện tại làm ngữ cảnh."}
             </div>
             <div className="rounded-md border border-line p-3">
               <label className="mb-3 block text-sm">
@@ -216,63 +225,39 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
                   <option value="hard">hard</option>
                 </select>
               </label>
-              <div className="mb-3 grid grid-cols-1 gap-2 text-sm">
-                {[
-                  ["multiple_choice", "Multiple choice"],
-                  ["true_false", "True/false"],
-                  ["short_answer", "Short answer"]
-                ].map(([type, label]) => (
-                  <label key={type} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={quizTypes.includes(type as QuizOptions["types"][number])}
-                      onChange={() => toggleQuizType(type as QuizOptions["types"][number])}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={includeTranscript} onChange={(event) => setIncludeTranscript(event.target.checked)} />
-                Include transcript
-              </label>
+              <p className="text-xs font-semibold uppercase text-slate-500">Multiple choice</p>
             </div>
-            <button type="button" onClick={generateQuiz} className="inline-flex w-full items-center justify-center gap-2 rounded bg-brand px-3 py-2 text-sm font-medium text-white">
-              <Sparkles size={16} />
-              Generate quiz
+            <button
+              type="button"
+              onClick={generateQuiz}
+              disabled={generatingQuiz || generatingFlashcards || !context.documentId}
+              className="inline-flex w-full items-center justify-center gap-2 rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {generatingQuiz ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
+              {generatingQuiz ? "Đang tạo quiz..." : "Tạo quiz"}
             </button>
             {quiz.map((question, index) => (
               <div key={question.id} className="rounded-md border border-line p-3">
                 <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Question {index + 1} · {question.type}</p>
                 <p className="text-sm font-medium leading-6">{question.prompt}</p>
-                {question.options ? (
-                  <div className="mt-3 space-y-2">
-                    {question.options.map((option) => (
-                      <label key={option} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="radio"
-                          name={question.id}
-                          checked={quizAnswers[question.id] === option}
-                          onChange={() => setQuizAnswers((current) => ({ ...current, [question.id]: option }))}
-                        />
-                        {option}
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <textarea
-                    className="mt-3 min-h-20 w-full rounded border border-line p-2 text-sm"
-                    value={quizAnswers[question.id] ?? ""}
-                    onChange={(event) => setQuizAnswers((current) => ({ ...current, [question.id]: event.target.value }))}
-                    placeholder="Short answer"
-                  />
-                )}
-                {question.referenceAnswer ? <p className="mt-3 text-xs text-slate-600">Reference: {question.referenceAnswer}</p> : null}
-                {question.rubric ? <p className="mt-1 text-xs text-slate-600">Rubric: {question.rubric}</p> : null}
+                <div className="mt-3 space-y-2">
+                  {(question.options ?? []).map((option) => (
+                    <label key={option} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name={question.id}
+                        checked={quizAnswers[question.id] === option}
+                        onChange={() => selectQuizAnswer(question.id, option)}
+                      />
+                      {option}
+                    </label>
+                  ))}
+                </div>
                 <button
                   type="button"
                   onClick={() => gradeQuestion(question)}
-                  className="mt-3 rounded border border-line px-3 py-1.5 text-xs font-medium hover:border-brand"
+                  disabled={!quizAnswers[question.id]}
+                  className="mt-3 rounded border border-line px-3 py-1.5 text-xs font-medium hover:border-brand disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Grade
                 </button>
@@ -283,46 +268,26 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
                     </p>
                     <p>Correct: {grades[question.id].feedback.correct}</p>
                     <p>Missing: {grades[question.id].feedback.missing}</p>
+                    <p className="mt-2 font-medium">Reference: {question.referenceAnswer ?? question.answer}</p>
+                    {question.rubric ? <p>Rubric: {question.rubric}</p> : null}
+                    <CitationList citations={question.citations} onOpenCitation={onOpenCitation} />
                   </div>
                 ) : null}
-                <CitationList citations={question.citations} onOpenCitation={onOpenCitation} />
               </div>
             ))}
           </div>
         ) : null}
 
-        {tab === "summary" ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ["current_slide", "Current slide"],
-                ["selected_text", "Selected text"],
-                ["full_lesson", "Full lesson"],
-                ["exam_cheat_sheet", "Exam cheat sheet"]
-              ].map(([kind, label]) => (
-                <button key={kind} type="button" onClick={() => generateSummary(kind)} className="rounded border border-line px-3 py-2 text-sm hover:border-brand">
-                  {label}
-                </button>
-              ))}
-            </div>
-            {summary ? (
-              <div className="rounded-md border border-line p-4">
-                <ul className="list-disc space-y-2 pl-4 text-sm leading-6">
-                  {summary.bullets.map((bullet) => (
-                    <li key={bullet}>{bullet}</li>
-                  ))}
-                </ul>
-                <CitationList citations={summary.citations} onOpenCitation={onOpenCitation} />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
         {tab === "flashcard" ? (
           <div className="space-y-4">
-            <button type="button" onClick={generateFlashcards} className="inline-flex w-full items-center justify-center gap-2 rounded bg-brand px-3 py-2 text-sm font-medium text-white">
-              <BookOpen size={16} />
-              Generate flashcards
+            <button
+              type="button"
+              onClick={generateFlashcards}
+              disabled={generatingQuiz || generatingFlashcards || !context.documentId}
+              className="inline-flex w-full items-center justify-center gap-2 rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {generatingFlashcards ? <LoaderCircle className="animate-spin" size={16} /> : <BookOpen size={16} />}
+              {generatingFlashcards ? "Đang tạo flashcard..." : "Tạo flashcard"}
             </button>
             {flashcards.map((card) => (
               <div key={card.id} className="rounded-md border border-line p-4">
@@ -333,19 +298,6 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
                 >
                   {flipped[card.id] ? card.back : card.front}
                 </button>
-                <div className="grid grid-cols-3 gap-2">
-                  <button className="rounded border border-line px-2 py-1.5 text-xs" type="button">
-                    <RotateCcw size={13} className="mx-auto" />
-                    Chua nho
-                  </button>
-                  <button className="rounded border border-line px-2 py-1.5 text-xs" type="button">
-                    Kho
-                  </button>
-                  <button className="rounded border border-line px-2 py-1.5 text-xs" type="button">
-                    <CheckCircle2 size={13} className="mx-auto" />
-                    Da nho
-                  </button>
-                </div>
                 <CitationList citations={[card.source]} onOpenCitation={onOpenCitation} />
               </div>
             ))}
@@ -376,4 +328,29 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
       ) : null}
     </aside>
   );
+}
+
+function normalizeAnswer(value: string) {
+  return value.normalize("NFKC").trim().toLocaleLowerCase("vi").replace(/\s+/g, " ");
+}
+
+function isCorrectMultipleChoice(selected: string, expected: string, options: string[]) {
+  const normalizedSelected = normalizeAnswer(selected);
+  const normalizedExpected = normalizeAnswer(expected);
+  if (normalizedSelected === normalizedExpected) return true;
+
+  if (/^[a-z]$/.test(normalizedExpected)) {
+    const optionIndex = normalizedExpected.charCodeAt(0) - "a".charCodeAt(0);
+    if (options[optionIndex] && normalizeAnswer(options[optionIndex]) === normalizedSelected) return true;
+  }
+  if (/^\d+$/.test(normalizedExpected)) {
+    const optionIndex = Number(normalizedExpected) - 1;
+    if (options[optionIndex] && normalizeAnswer(options[optionIndex]) === normalizedSelected) return true;
+  }
+
+  const selectedMarker = normalizedSelected.match(/^([a-z])(?:[.):\-]|\s)/)?.[1];
+  if (/^[a-z]$/.test(normalizedExpected) && selectedMarker === normalizedExpected) return true;
+
+  const withoutMarker = (value: string) => value.replace(/^[a-z](?:[.):\-]|\s)+/, "").trim();
+  return withoutMarker(normalizedSelected) === withoutMarker(normalizedExpected);
 }

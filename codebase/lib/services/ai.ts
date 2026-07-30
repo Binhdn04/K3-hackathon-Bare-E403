@@ -3,14 +3,14 @@ import { openAI } from "./openai";
 import { retrieve, retrieveForGeneration } from "./retrieval";
 
 const tutorInstructions = `Ban la AI Tutor. Tra loi bang tieng Viet ro rang, ngan gon va chi dua tren SOURCE CONTEXT.
-Khong bo sung kien thuc ben ngoai context. Khi dung mot doan, ghi citation theo nhan da cung cap, vi du [Slide 3] hoac [Transcript 02:10].
+Khong bo sung kien thuc ben ngoai context. Khi dung mot doan, ghi citation theo nhan da cung cap, vi du [Trang 3].
 Neu context khong du, noi ro dieu gi khong the ket luan.`;
 
 function contextWithCitations(content: string, citations: Citation[]) {
   const labels = citations.map((citation) => {
     const label = citation.type === "transcript"
       ? `[Transcript ${formatTime(citation.timestampStart ?? 0)}]`
-      : `[Slide ${citation.slideNumber ?? citation.pageNumber ?? "?"}]`;
+      : `[Trang ${citation.slideNumber ?? citation.pageNumber ?? "?"}]`;
     return `${citation.chunkId ?? citation.id} => ${label}`;
   });
   return `${content}\n\nCITATION LABELS:\n${labels.join("\n")}`;
@@ -20,7 +20,10 @@ export async function answerQuestion(question: string, context: ChatContext): Pr
   const found = await retrieve(question, context);
   if (found.isSufficient) {
     const content = await openAI.createText(tutorInstructions, `QUESTION:\n${question}\n\nSOURCE CONTEXT:\n${contextWithCitations(found.content, found.citations)}`);
-    return assistantMessage(content, found.citations, found.sourceLevel);
+    const citations = found.sourceLevel === "entire_document"
+      ? citationsReferencedByAnswer(content, found.citations)
+      : found.citations;
+    return assistantMessage(content, citations, found.sourceLevel);
   }
 
   const web = await openAI.searchWeb(question);
@@ -51,7 +54,10 @@ type GeneratedQuiz = {
 };
 
 export async function generateQuiz(options: QuizOptions, context: ChatContext): Promise<QuizQuestion[]> {
-  const found = await retrieveForGeneration(context, options.source);
+  const scope = context.scope === "entire_document"
+    ? "entire_document"
+    : context.selectedText?.trim() ? "selected_text" : "current_slide";
+  const found = await retrieveForGeneration(context, scope);
   if (!found.isSufficient) throw new Error("No material is available for this quiz");
   const result = await openAI.createJson<GeneratedQuiz>(
     "Tao quiz bang tieng Viet chi tu hoc lieu. Cau hoi phai co dap an ro rang. sourceIds chi chua ID nam trong context.",
@@ -77,7 +83,7 @@ export async function generateQuiz(options: QuizOptions, context: ChatContext): 
               answer: { type: "string" },
               referenceAnswer: { type: ["string", "null"] },
               rubric: { type: ["string", "null"] },
-              points: { type: "integer", minimum: 1, maximum: 10 },
+              points: { type: "integer", minimum: 1, maximum: 1 },
               sourceIds: { type: "array", items: { type: "string" }, minItems: 1 }
             }
           }
@@ -93,7 +99,7 @@ export async function generateQuiz(options: QuizOptions, context: ChatContext): 
     answer: question.answer,
     referenceAnswer: question.referenceAnswer ?? undefined,
     rubric: question.rubric ?? undefined,
-    points: question.points,
+    points: 1,
     citations: mapCitations(question.sourceIds, found.citations)
   }));
 }
@@ -105,14 +111,14 @@ export async function gradeQuiz(answer: string, question: QuizQuestion) {
     missing: string;
   }>(
     "Cham bai bang tieng Viet theo dap an va rubric. Khong cho diem vuot maxScore.",
-    JSON.stringify({ answer, expectedAnswer: question.answer, referenceAnswer: question.referenceAnswer, rubric: question.rubric, maxScore: question.points }),
+    JSON.stringify({ answer, expectedAnswer: question.answer, referenceAnswer: question.referenceAnswer, rubric: question.rubric, maxScore: 1 }),
     "quiz_grade",
     {
       type: "object",
       additionalProperties: false,
       required: ["score", "correct", "missing"],
       properties: {
-        score: { type: "number", minimum: 0, maximum: question.points },
+        score: { type: "number", minimum: 0, maximum: 1 },
         correct: { type: "string" },
         missing: { type: "string" }
       }
@@ -120,48 +126,17 @@ export async function gradeQuiz(answer: string, question: QuizQuestion) {
   );
   return {
     model: openAI.model,
-    score: Math.min(question.points, Math.max(0, result.score)),
-    maxScore: question.points,
+    score: Math.min(1, Math.max(0, result.score)),
+    maxScore: 1,
     feedback: { correct: result.correct, missing: result.missing },
     citations: question.citations
   };
 }
 
-export async function generateSummary(kind: string, context: ChatContext) {
-  const found = await retrieveForGeneration(context, kind);
-  if (!found.isSufficient) throw new Error("No material is available to summarize");
-  const result = await openAI.createJson<{ bullets: Array<{ text: string; sourceIds: string[] }> }>(
-    "Tom tat bang tieng Viet, bullet ngan gon, chi dung context. Moi bullet phai tro den sourceIds that trong context.",
-    `SUMMARY TYPE: ${kind}\n\nCONTEXT:\n${found.content}`,
-    "summary",
-    {
-      type: "object",
-      additionalProperties: false,
-      required: ["bullets"],
-      properties: {
-        bullets: {
-          type: "array",
-          minItems: 2,
-          maxItems: 10,
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["text", "sourceIds"],
-            properties: {
-              text: { type: "string" },
-              sourceIds: { type: "array", items: { type: "string" }, minItems: 1 }
-            }
-          }
-        }
-      }
-    }
-  );
-  const ids = result.bullets.flatMap((bullet) => bullet.sourceIds);
-  return { model: openAI.model, bullets: result.bullets.map((bullet) => bullet.text), citations: mapCitations(ids, found.citations) };
-}
-
 export async function generateFlashcards(context: ChatContext): Promise<Flashcard[]> {
-  const scope = context.selectedText ? "selected_text" : "current_slide";
+  const scope = context.scope === "entire_document"
+    ? "entire_document"
+    : context.selectedText ? "selected_text" : "current_slide";
   const found = await retrieveForGeneration(context, scope);
   if (!found.isSufficient) throw new Error("No material is available for flashcards");
   const result = await openAI.createJson<{ cards: Array<{ front: string; back: string; sourceId: string }> }>(
@@ -200,6 +175,23 @@ function mapCitations(ids: string[], citations: Citation[]) {
   const wanted = new Set(ids);
   const matched = citations.filter((citation) => wanted.has(citation.chunkId ?? citation.id));
   return matched.length > 0 ? matched : citations.slice(0, 2);
+}
+
+function citationsReferencedByAnswer(content: string, citations: Citation[]) {
+  const referencedPages = new Set<number>();
+  for (const match of content.matchAll(/\[Trang\s+([^\]]+)\]/gi)) {
+    for (const page of match[1].match(/\d+/g) ?? []) referencedPages.add(Number(page));
+  }
+
+  const seenPages = new Set<string>();
+  return citations.filter((citation) => {
+    const page = citation.slideNumber ?? citation.pageNumber;
+    if (page === undefined || !referencedPages.has(page)) return false;
+    const key = `${citation.documentId ?? ""}:${page}`;
+    if (seenPages.has(key)) return false;
+    seenPages.add(key);
+    return true;
+  });
 }
 
 function assistantMessage(content: string, citations: Citation[], sourceLevel: ChatMessage["sourceLevel"]): ChatMessage {

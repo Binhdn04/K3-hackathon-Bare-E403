@@ -18,6 +18,7 @@ export type ChatContext = {
   documentId?: string;
   slideNumber?: number;
   selectedText?: string;
+  scope?: "current_slide" | "entire_document";
 };
 
 export type LearningDocument = {
@@ -29,8 +30,6 @@ export type LearningDocument = {
   kind: "pdf" | "pptx" | "markdown" | "txt";
   status: DocumentStatus;
   pageCount: number;
-  transcript?: string;
-  transcriptText?: string;
 };
 
 export type DocumentChunk = {
@@ -59,15 +58,13 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
-  sourceLevel?: "selected_text" | "current_slide" | "other_slides" | "transcript" | "other_materials" | "web";
+  sourceLevel?: "selected_text" | "current_slide" | "entire_document" | "other_slides" | "transcript" | "other_materials" | "web";
 };
 
 export type QuizOptions = {
   questionCount: number;
   difficulty: "easy" | "medium" | "hard";
   types: Array<"multiple_choice" | "true_false" | "short_answer">;
-  includeTranscript: boolean;
-  source: "selected_text" | "current_slide" | "slide_range" | "transcript" | "full_lesson";
 };
 
 export type QuizQuestion = {

@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+::highlight(selected-context) {
+  background-color: #fde68a;
+  color: inherit;
+}
+
 :root {
   color-scheme: light;
 }
