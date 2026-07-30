@@ -95,5 +95,5 @@ export function MarkdownContent({ content }: { content: string }) {
     blocks.push(<p key={blocks.length}>{inline(paragraph.join(" "))}</p>);
   }
 
-  return <div className="prose max-w-none leading-8">{blocks}</div>;
+  return <div className="prose prose-invert max-w-none leading-8 prose-a:text-[#62d8ff] prose-code:text-[#67ddff]">{blocks}</div>;
 }

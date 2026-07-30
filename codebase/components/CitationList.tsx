@@ -18,7 +18,7 @@ export function CitationList({ citations, onOpenCitation }: Props) {
           key={citation.id}
           type="button"
           onClick={() => onOpenCitation(citation)}
-          className="inline-flex max-w-full items-center gap-1 rounded border border-line bg-white px-2 py-1 text-xs text-ink hover:border-brand hover:text-brand"
+          className="inline-flex max-w-full items-center gap-1 rounded-xl border border-[#2f4261] bg-[#101c33] px-2 py-1 text-xs text-[#62d8ff] hover:border-[#00aee8] hover:text-[#9cecff]"
           title={citation.type === "web" ? "Open web source" : "Open source in reader"}
         >
           <span className="truncate">{citation.title}</span>

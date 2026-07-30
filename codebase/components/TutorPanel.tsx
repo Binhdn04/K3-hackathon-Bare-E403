@@ -2,7 +2,7 @@
 
 import { CitationList } from "@/components/CitationList";
 import type { ChatContext, ChatMessage, Citation, Flashcard, QuizOptions, QuizQuestion } from "@/lib/types";
-import { BookOpen, LoaderCircle, MessageSquareText, Send, Sparkles } from "lucide-react";
+import { BookOpen, Bot, LoaderCircle, MessageSquareText, Send, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type Props = {
@@ -32,7 +32,7 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
   const [questionCount, setQuestionCount] = useState(4);
   const [difficulty, setDifficulty] = useState<QuizOptions["difficulty"]>("medium");
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
-  const [grades, setGrades] = useState<Record<string, { score: number; maxScore: number; feedback: { correct: string; missing: string } }>>({});
+  const [grades, setGrades] = useState<Record<string, { feedback: { correct: string; missing: string } }>>({});
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [flipped, setFlipped] = useState<Record<string, boolean>>({});
   const contextLabel = useMemo(() => {
@@ -98,10 +98,8 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
     setGrades((current) => ({
       ...current,
       [question.id]: {
-        score: correct ? 1 : 0,
-        maxScore: 1,
         feedback: {
-          correct: correct ? "Chính xác." : `Đáp án đúng: ${question.answer}`,
+          correct: correct ? "Đáp án đúng" : "Đáp án sai",
           missing: correct ? "Không có nội dung còn thiếu." : "Hãy xem lại đáp án và tài liệu tham khảo bên dưới."
         }
       }
@@ -131,28 +129,43 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
   }
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-l border-line bg-white">
-      <div className="border-b border-line px-4 py-4">
-        <div className="mb-3 grid grid-cols-3 gap-1 rounded-md bg-slate-100 p-1">
+    <aside className="vlearn-tutor flex h-full min-h-0 flex-col bg-[#030a1b] text-[#f5f7ff]">
+      <div className="border-b border-[#23324c] px-4 py-4">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#065f80] bg-[#071a30] text-[#12c8ff]">
+            <Bot size={17} />
+          </span>
+          <div>
+            <h2 className="text-base font-extrabold text-white">VLearn Tutor</h2>
+            <p className="text-[11px] font-semibold text-[#00e2a4]">Trợ lý học theo ngữ cảnh</p>
+          </div>
+        </div>
+        <div className="mb-3 grid grid-cols-3 gap-1 rounded-xl bg-[#0b152b] p-1">
           {tabs.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setTab(item.id)}
-              className={`rounded px-2 py-1.5 text-xs font-medium ${tab === item.id ? "bg-white text-brand shadow-sm" : "text-slate-600"}`}
+              data-active={tab === item.id}
+              className={`rounded-lg px-2 py-1.5 text-xs font-semibold ${
+                tab === item.id ? "bg-[#11344d] text-[#62d8ff] shadow-sm" : "text-[#7f8eaa] hover:text-[#c8d3e8]"
+              }`}
             >
               {item.label}
             </button>
           ))}
         </div>
-        <p className="rounded border border-line bg-panel px-3 py-2 text-sm">
-          <span className="font-medium">Ngữ cảnh:</span> {contextLabel}
+        <p className="rounded-xl border border-[#1e2e48] bg-[#020719] px-3 py-2 text-xs text-[#9dabca]">
+          <span className="font-semibold text-[#62d8ff]">Ngữ cảnh:</span> {contextLabel}
         </p>
-        <div className="mt-2 grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1" aria-label="Phạm vi ngữ cảnh">
+        <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-[#0b152b] p-1" aria-label="Phạm vi ngữ cảnh">
           <button
             type="button"
             onClick={() => onContextScopeChange("current_slide")}
-            className={`rounded px-2 py-1.5 text-xs font-medium ${context.scope !== "entire_document" ? "bg-white text-brand shadow-sm" : "text-slate-600"}`}
+            data-active={context.scope !== "entire_document"}
+            className={`rounded-lg px-2 py-1.5 text-xs font-semibold ${
+              context.scope !== "entire_document" ? "bg-[#082c4e] text-[#66ddff] shadow-sm" : "text-[#7f8eaa]"
+            }`}
           >
             Trang hiện tại
           </button>
@@ -160,89 +173,104 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
             type="button"
             onClick={() => onContextScopeChange("entire_document")}
             disabled={!context.documentId}
-            className={`rounded px-2 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${context.scope === "entire_document" ? "bg-white text-brand shadow-sm" : "text-slate-600"}`}
+            data-active={context.scope === "entire_document"}
+            className={`rounded-lg px-2 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+              context.scope === "entire_document" ? "bg-[#082c4e] text-[#66ddff] shadow-sm" : "text-[#7f8eaa]"
+            }`}
           >
             Toàn bộ file
           </button>
         </div>
         {generatingQuiz || generatingFlashcards ? (
-          <p role="status" className="mt-2 flex items-center gap-2 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
+          <p role="status" className="mt-2 flex items-center gap-2 rounded-xl border border-sky-900 bg-sky-950/50 px-3 py-2 text-sm text-sky-300">
             <LoaderCircle className="animate-spin" size={15} />
             {generatingQuiz ? "Hệ thống đang tạo quiz..." : "Hệ thống đang tạo flashcard..."}
           </p>
         ) : null}
-        {error ? <p className="mt-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
+        {error ? <p className="mt-2 rounded-xl border border-rose-900 bg-rose-950/50 px-3 py-2 text-xs text-rose-300">{error}</p> : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className="vlearn-scrollbar min-h-0 flex-1 overflow-auto p-4">
         {tab === "tutor" ? (
           <div className="space-y-4">
             {messages.map((message) => (
-              <div key={message.id} className={`rounded-md border p-3 ${message.role === "user" ? "ml-8 border-brand bg-emerald-50" : "mr-8 border-line bg-white"}`}>
-                <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+              <div
+                key={message.id}
+                className={`rounded-2xl border p-3 ${
+                  message.role === "user"
+                    ? "ml-8 border-[#0d7198] bg-[#082c4e]"
+                    : "mr-8 border-[#1e2e48] bg-[#020719]"
+                }`}
+              >
+                <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-[#71809e]">
                   <MessageSquareText size={13} />
                   {message.role}
                 </div>
-                <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
-                {message.sourceLevel === "web" ? <p className="mt-2 text-xs font-semibold text-amber-700">Nguon Internet</p> : null}
+                <p className="whitespace-pre-wrap text-sm leading-6 text-[#edf3ff]">{message.content}</p>
+                {message.sourceLevel === "web" ? <p className="mt-2 text-xs font-semibold text-amber-300">Nguồn Internet</p> : null}
                 <CitationList citations={message.citations ?? []} onOpenCitation={onOpenCitation} />
               </div>
             ))}
-            {loading ? <p className="text-sm text-slate-500">Generating...</p> : null}
+            {messages.length === 0 ? (
+              <div className="rounded-2xl border border-[#1e2e48] bg-[#020719] p-4 text-sm leading-6 text-[#d7e0f2]">
+                Xin chào! Mình là VLearn Tutor. Bạn có thể bôi đen một đoạn trên slide hoặc gửi câu hỏi tự do nhé!
+              </div>
+            ) : null}
+            {loading ? <p className="text-sm text-[#7f8eaa]">Đang tạo câu trả lời...</p> : null}
           </div>
         ) : null}
 
         {tab === "quiz" ? (
           <div className="space-y-4">
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <div className="rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
               {context.scope === "entire_document"
                 ? "Quiz sẽ dùng toàn bộ file đang mở làm ngữ cảnh."
                 : context.selectedText
                 ? "Quiz sẽ dùng đoạn văn bản bạn đang bôi đen làm ngữ cảnh."
                 : "Quiz sẽ dùng trang hiện tại làm ngữ cảnh."}
             </div>
-            <div className="rounded-md border border-line p-3">
+            <div className="rounded-2xl border border-[#2a3955] bg-[#0b152a] p-3">
               <label className="mb-3 block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Questions</span>
+                <span className="mb-1 block text-xs font-semibold uppercase text-[#7f8eaa]">Questions</span>
                 <input
                   type="number"
                   min={1}
                   max={10}
                   value={questionCount}
                   onChange={(event) => setQuestionCount(Number(event.target.value))}
-                  className="w-full rounded border border-line px-2 py-1.5"
+                  className="w-full rounded-xl border border-[#30425f] bg-[#0d1830] px-2 py-1.5 text-[#f4f7ff] outline-none focus:border-[#00aee8]"
                 />
               </label>
               <label className="mb-3 block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Difficulty</span>
+                <span className="mb-1 block text-xs font-semibold uppercase text-[#7f8eaa]">Difficulty</span>
                 <select
                   value={difficulty}
                   onChange={(event) => setDifficulty(event.target.value as QuizOptions["difficulty"])}
-                  className="w-full rounded border border-line px-2 py-1.5"
+                  className="w-full rounded-xl border border-[#30425f] bg-[#0d1830] px-2 py-1.5 text-[#f4f7ff] outline-none focus:border-[#00aee8]"
                 >
                   <option value="easy">easy</option>
                   <option value="medium">medium</option>
                   <option value="hard">hard</option>
                 </select>
               </label>
-              <p className="text-xs font-semibold uppercase text-slate-500">Multiple choice</p>
+              <p className="text-xs font-semibold uppercase text-[#7f8eaa]">Multiple choice</p>
             </div>
             <button
               type="button"
               onClick={generateQuiz}
               disabled={generatingQuiz || generatingFlashcards || !context.documentId}
-              className="inline-flex w-full items-center justify-center gap-2 rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="vlearn-primary-button inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#00aee8] bg-[#073b68] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {generatingQuiz ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
               {generatingQuiz ? "Đang tạo quiz..." : "Tạo quiz"}
             </button>
             {quiz.map((question, index) => (
-              <div key={question.id} className="rounded-md border border-line p-3">
-                <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Question {index + 1} · {question.type}</p>
-                <p className="text-sm font-medium leading-6">{question.prompt}</p>
+              <div key={question.id} className="rounded-2xl border border-[#2a3955] bg-[#0b152a] p-3">
+                <p className="mb-2 text-xs font-semibold uppercase text-[#71809e]">Question {index + 1} · {question.type}</p>
+                <p className="text-sm font-medium leading-6 text-[#edf3ff]">{question.prompt}</p>
                 <div className="mt-3 space-y-2">
                   {(question.options ?? []).map((option) => (
-                    <label key={option} className="flex items-center gap-2 text-sm">
+                    <label key={option} className="flex items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-sm text-[#c8d3e8] hover:border-[#2d405f] hover:bg-[#101c33]">
                       <input
                         type="radio"
                         name={question.id}
@@ -257,19 +285,15 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
                   type="button"
                   onClick={() => gradeQuestion(question)}
                   disabled={!quizAnswers[question.id]}
-                  className="mt-3 rounded border border-line px-3 py-1.5 text-xs font-medium hover:border-brand disabled:cursor-not-allowed disabled:opacity-50"
+                  className="vlearn-secondary-button mt-3 rounded-xl border border-[#0d7198] bg-[#082c4e] px-3 py-1.5 text-xs font-semibold text-[#e8f8ff] hover:border-[#00aee8] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Grade
                 </button>
                 {grades[question.id] ? (
-                  <div className="mt-3 rounded bg-panel p-3 text-xs leading-5">
-                    <p className="font-semibold">
-                      Score: {grades[question.id].score}/{grades[question.id].maxScore}
-                    </p>
-                    <p>Correct: {grades[question.id].feedback.correct}</p>
+                  <div className="mt-3 rounded-xl border border-[#23324c] bg-[#071021] p-3 text-xs leading-5 text-[#c8d3e8]">
+                    <p className="font-semibold">{grades[question.id].feedback.correct}</p>
                     <p>Missing: {grades[question.id].feedback.missing}</p>
                     <p className="mt-2 font-medium">Reference: {question.referenceAnswer ?? question.answer}</p>
-                    {question.rubric ? <p>Rubric: {question.rubric}</p> : null}
                     <CitationList citations={question.citations} onOpenCitation={onOpenCitation} />
                   </div>
                 ) : null}
@@ -284,17 +308,17 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
               type="button"
               onClick={generateFlashcards}
               disabled={generatingQuiz || generatingFlashcards || !context.documentId}
-              className="inline-flex w-full items-center justify-center gap-2 rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="vlearn-primary-button inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#00aee8] bg-[#073b68] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {generatingFlashcards ? <LoaderCircle className="animate-spin" size={16} /> : <BookOpen size={16} />}
               {generatingFlashcards ? "Đang tạo flashcard..." : "Tạo flashcard"}
             </button>
             {flashcards.map((card) => (
-              <div key={card.id} className="rounded-md border border-line p-4">
+              <div key={card.id} className="rounded-2xl border border-[#2a3955] bg-[#0b152a] p-4">
                 <button
                   type="button"
                   onClick={() => setFlipped((current) => ({ ...current, [card.id]: !current[card.id] }))}
-                  className="mb-3 flex min-h-32 w-full items-center justify-center rounded border border-dashed border-line bg-panel p-4 text-center text-sm font-medium leading-6"
+                  className="mb-3 flex min-h-32 w-full items-center justify-center rounded-xl border border-dashed border-[#30425f] bg-[#071021] p-4 text-center text-sm font-medium leading-6 text-[#edf3ff]"
                 >
                   {flipped[card.id] ? card.back : card.front}
                 </button>
@@ -307,7 +331,7 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
 
       {tab === "tutor" ? (
         <form
-          className="border-t border-line p-3"
+          className="border-t border-[#23324c] bg-[#03091a] p-3"
           onSubmit={(event) => {
             event.preventDefault();
             void sendChat();
@@ -317,10 +341,10 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              className="min-h-12 flex-1 resize-none rounded border border-line p-2 text-sm outline-none focus:border-brand"
-              placeholder="Ask about the current context"
+              className="min-h-12 flex-1 resize-none rounded-2xl border border-[#30425f] bg-[#0d1830] p-3 text-sm text-[#f4f7ff] outline-none placeholder:text-[#607190] focus:border-[#00aee8]"
+              placeholder="Nhập câu hỏi hoặc bôi đen tài liệu..."
             />
-            <button type="submit" className="inline-flex h-12 w-12 items-center justify-center rounded bg-brand text-white" title="Send">
+            <button type="submit" className="vlearn-send-button inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#0d7198] bg-[#082c4e] text-[#66ddff] hover:border-[#00aee8]" title="Gửi">
               <Send size={17} />
             </button>
           </div>

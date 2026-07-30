@@ -90,3 +90,40 @@ export type Flashcard = {
   source: Citation;
   status: "new" | "hard" | "known";
 };
+
+export type AnnotationTool = "read" | "pen" | "highlight" | "circle" | "text" | "image" | "eraser";
+
+type AnnotationBase = {
+  id: string;
+  color: string;
+};
+
+export type PdfAnnotation =
+  | (AnnotationBase & {
+      type: "pen" | "highlight";
+      points: Array<{ x: number; y: number }>;
+      strokeWidth: number;
+    })
+  | (AnnotationBase & {
+      type: "circle";
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      strokeWidth: number;
+    })
+  | (AnnotationBase & {
+      type: "text";
+      x: number;
+      y: number;
+      text: string;
+      fontSize: number;
+    })
+  | (AnnotationBase & {
+      type: "image";
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      src: string;
+    });

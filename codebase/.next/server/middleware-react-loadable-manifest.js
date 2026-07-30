@@ -1,1 +1,0 @@
-self.__REACT_LOADABLE_MANIFEST="{\"components/DocumentReader.tsx -> ./PdfDocumentView\":{\"id\":\"components/DocumentReader.tsx -> ./PdfDocumentView\",\"files\":[\"static/css/_app-pages-browser_components_PdfDocumentView_tsx.css\",\"static/chunks/_app-pages-browser_components_PdfDocumentView_tsx.js\"]}}"

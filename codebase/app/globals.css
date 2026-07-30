@@ -8,6 +8,10 @@
 }
 
 :root {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
   color-scheme: light;
 }
 
@@ -22,8 +26,17 @@ body {
 
 body {
   margin: 0;
-  background: #edf1f5;
-  color: #17202a;
+  background: #03091a;
+  color: #f5f7ff;
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-feature-settings: "kern";
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+:root[data-theme="light"] body {
+  background: #f4f7fb;
+  color: #17233b;
 }
 
 button,
@@ -34,5 +47,397 @@ select {
 }
 
 ::selection {
-  background: rgba(47, 125, 104, 0.2);
+  background: rgba(18, 200, 255, 0.28);
+  color: #f5f7ff;
+}
+
+.vlearn-logo-mark {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+}
+
+.vlearn-logo-blue {
+  fill: #168bd0;
+}
+
+.vlearn-logo-red {
+  fill: #ef4750;
+}
+
+.vlearn-logo-word {
+  color: #f5f7ff;
+}
+
+.vlearn-logo-v {
+  color: #ffadb2;
+}
+
+.vlearn-scrollbar {
+  scrollbar-color: #5a6a84 #071021;
+  scrollbar-width: thin;
+}
+
+.vlearn-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.vlearn-scrollbar::-webkit-scrollbar-track {
+  background: #071021;
+}
+
+.vlearn-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #5a6a84;
+}
+
+.vlearn-tutor input[type="radio"] {
+  accent-color: #12c8ff;
+}
+
+/* Light mode maps the existing VLearn dark palette to its light counterpart.
+   Keeping this at the theme boundary lets feature components retain their logic. */
+.theme-light {
+  background-color: #f4f7fb !important;
+  color: #17233b;
+}
+
+.theme-light [class~="bg-[#020719]"],
+.theme-light [class~="bg-[#03091a]"],
+.theme-light [class~="bg-[#030a1b]"],
+.theme-light [class~="bg-[#071126]"] {
+  background-color: #ffffff !important;
+}
+
+.theme-light [class~="bg-[#071021]"] {
+  background-color: #eef3f8 !important;
+}
+
+.theme-light [class~="bg-[#0a1428]"],
+.theme-light [class~="bg-[#0b1529]"],
+.theme-light [class~="bg-[#0b152a]"],
+.theme-light [class~="bg-[#0b152b]"],
+.theme-light [class~="bg-[#0b172d]"],
+.theme-light [class~="bg-[#0c172c]"],
+.theme-light [class~="bg-[#0d1830]"],
+.theme-light [class~="bg-[#0d1a30]"],
+.theme-light [class~="bg-[#101c33]"] {
+  background-color: #ffffff !important;
+}
+
+.theme-light [class~="bg-[#061d35]"],
+.theme-light [class~="bg-[#071a30]"],
+.theme-light [class~="bg-[#082c4e]"],
+.theme-light [class~="bg-[#11344d]"],
+.theme-light [class~="bg-[#122039]"],
+.theme-light [class~="bg-[#12213a]"] {
+  background-color: #f5f8fc !important;
+}
+
+.theme-light [class~="bg-[#06304a]"],
+.theme-light [class~="bg-[#073b68]"],
+.theme-light [class~="bg-[#0b4767]"] {
+  background-color: #e8f5ff !important;
+}
+
+.theme-light [class~="border-[#23324c]"],
+.theme-light [class~="border-[#263550]"],
+.theme-light [class~="border-[#27405f]"],
+.theme-light [class~="border-[#2a3955]"],
+.theme-light [class~="border-[#2a3b58]"],
+.theme-light [class~="border-[#2a3e5e]"],
+.theme-light [class~="border-[#2b3a55]"],
+.theme-light [class~="border-[#2d405f]"],
+.theme-light [class~="border-[#2f4261]"],
+.theme-light [class~="border-[#30425f]"],
+.theme-light [class~="border-[#31425e]"],
+.theme-light [class~="border-[#334866]"],
+.theme-light [class~="border-[#3f5577]"],
+.theme-light [class~="border-[#40516d]"] {
+  border-color: #d7e0ec !important;
+}
+
+.theme-light [class~="text-[#f5f7ff]"],
+.theme-light [class~="text-[#f4f7ff]"],
+.theme-light [class~="text-[#eef3ff]"],
+.theme-light [class~="text-[#edf3ff]"],
+.theme-light [class~="text-[#e7edfb]"],
+.theme-light [class~="text-[#e8f8ff]"],
+.theme-light [class~="text-[#dce6f8]"],
+.theme-light [class~="text-[#d7e0f2]"],
+.theme-light [class~="text-[#c8d3e8]"],
+.theme-light [class~="text-[#bdc8dc]"] {
+  color: #17233b !important;
+}
+
+.theme-light [class~="text-[#9dabca]"],
+.theme-light [class~="text-[#9aabc7]"],
+.theme-light [class~="text-[#8fa0bc]"],
+.theme-light [class~="text-[#8a99b5]"],
+.theme-light [class~="text-[#7f8eaa]"],
+.theme-light [class~="text-[#7f8daa]"],
+.theme-light [class~="text-[#7585a3]"],
+.theme-light [class~="text-[#71809e]"],
+.theme-light [class~="text-[#607190]"] {
+  color: #6a7a94 !important;
+}
+
+.theme-light [class~="text-[#62d8ff]"],
+.theme-light [class~="text-[#66ddff]"],
+.theme-light [class~="text-[#67ddff]"],
+.theme-light [class~="text-[#9cecff]"] {
+  color: #087cab !important;
+}
+
+.theme-light [class~="text-white"] {
+  color: #17233b !important;
+}
+
+.theme-light .vlearn-logo-blue {
+  fill: #183f73;
+}
+
+.theme-light .vlearn-logo-red {
+  fill: #e33e46;
+}
+
+.theme-light .vlearn-logo-word {
+  color: #17233b;
+}
+
+.theme-light .vlearn-logo-v {
+  color: #c92f38;
+}
+
+.vlearn-icon-button,
+.vlearn-tool-button,
+.reader-nav-button,
+.vlearn-primary-button,
+.vlearn-secondary-button,
+.vlearn-send-button {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.theme-light .vlearn-icon-button,
+.theme-light .vlearn-tool-button,
+.theme-light .reader-nav-button {
+  border-color: #d5dfeb !important;
+  background-color: #ffffff !important;
+  color: #52627a !important;
+  box-shadow: 0 1px 2px rgba(31, 52, 78, 0.04);
+}
+
+.theme-light .vlearn-icon-button:hover,
+.theme-light .vlearn-tool-button:hover,
+.theme-light .reader-nav-button:hover {
+  border-color: #38a5d2 !important;
+  background-color: #f4fbff !important;
+  color: #087cab !important;
+}
+
+.theme-light .vlearn-tool-button[data-active="true"] {
+  border-color: #189dcc !important;
+  background-color: #e9f7ff !important;
+  color: #0877a5 !important;
+  box-shadow: inset 0 0 0 1px rgba(24, 157, 204, 0.08);
+}
+
+.theme-light .vlearn-icon-button:disabled,
+.theme-light .vlearn-tool-button:disabled,
+.theme-light .reader-nav-button:disabled {
+  border-color: #e5eaf0 !important;
+  background-color: #f7f9fb !important;
+  color: #a5afbd !important;
+  box-shadow: none;
+}
+
+.theme-light .annotation-toolbar-surface {
+  border-color: #d7e0ea !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 8px 22px rgba(37, 59, 85, 0.14) !important;
+}
+
+.theme-light .vlearn-zoom-control {
+  border-color: #d5dfeb !important;
+  background-color: #ffffff !important;
+  color: #52627a;
+}
+
+.theme-light .material-button {
+  border-color: #d9e2ec !important;
+  background-color: #ffffff !important;
+  color: #17233b;
+  box-shadow: 0 1px 2px rgba(31, 52, 78, 0.03);
+}
+
+.theme-light .material-button:hover {
+  border-color: #9bcce2 !important;
+  background-color: #f8fcff !important;
+}
+
+.theme-light .material-button[data-active="true"] {
+  border-color: #2ca7d2 !important;
+  border-left-color: #0a80b7 !important;
+  background-color: #eaf7ff !important;
+  box-shadow: 0 2px 5px rgba(37, 94, 128, 0.08);
+}
+
+.theme-light .material-delete-button {
+  border-color: #d9e2ec !important;
+  background-color: #ffffff !important;
+  color: #7b899d !important;
+}
+
+.theme-light .material-delete-button:hover {
+  border-color: #e88991 !important;
+  background-color: #fff2f3 !important;
+  color: #bd3945 !important;
+}
+
+.theme-light .document-status[data-status="ready"] {
+  background-color: #eaf8f2 !important;
+  color: #187453 !important;
+}
+
+.theme-light .document-status[data-status="uploading"] {
+  background-color: #fff7df !important;
+  color: #946200 !important;
+}
+
+.theme-light .document-status[data-status="processing"] {
+  background-color: #eaf6ff !important;
+  color: #116b96 !important;
+}
+
+.theme-light .document-status[data-status="failed"] {
+  background-color: #fff0f1 !important;
+  color: #b33b46 !important;
+}
+
+.theme-light .vlearn-tutor button[data-active="true"] {
+  background-color: #eef5fa !important;
+  color: #087cab !important;
+  box-shadow: none !important;
+}
+
+.theme-light .vlearn-tutor button[data-active="false"] {
+  background-color: transparent !important;
+  color: #63738d !important;
+}
+
+.theme-light .vlearn-primary-button {
+  border-color: #0a82b9 !important;
+  background-color: #0a82b9 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 10px rgba(10, 130, 185, 0.16);
+}
+
+.theme-light .vlearn-primary-button:hover {
+  border-color: #086f9e !important;
+  background-color: #086f9e !important;
+}
+
+.theme-light .vlearn-secondary-button {
+  border-color: #9ccde2 !important;
+  background-color: #eff9fd !important;
+  color: #0876a4 !important;
+}
+
+.theme-light .vlearn-send-button {
+  border-color: #0a82b9 !important;
+  background-color: #0a82b9 !important;
+  color: #ffffff !important;
+}
+
+.theme-light input,
+.theme-light textarea,
+.theme-light select {
+  color: #17233b;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #8290a5 !important;
+}
+
+.theme-light .vlearn-ready-badge {
+  border-color: #9de4c8 !important;
+  background-color: #effcf7 !important;
+  color: #147a59 !important;
+}
+
+.theme-light .vlearn-scrollbar {
+  scrollbar-color: #a8b5c7 #eef3f8;
+}
+
+.theme-light .vlearn-scrollbar::-webkit-scrollbar-track {
+  background: #eef3f8;
+}
+
+.theme-light .vlearn-scrollbar::-webkit-scrollbar-thumb {
+  background: #a8b5c7;
+}
+
+.theme-light .prose-invert {
+  --tw-prose-body: #334155;
+  --tw-prose-headings: #17233b;
+  --tw-prose-lead: #475569;
+  --tw-prose-links: #087cab;
+  --tw-prose-bold: #17233b;
+  --tw-prose-counters: #64748b;
+  --tw-prose-bullets: #94a3b8;
+  --tw-prose-hr: #d7e0ec;
+  --tw-prose-quotes: #17233b;
+  --tw-prose-quote-borders: #cbd5e1;
+  --tw-prose-captions: #64748b;
+  --tw-prose-code: #17233b;
+  --tw-prose-pre-code: #e2e8f0;
+  --tw-prose-pre-bg: #17233b;
+  --tw-prose-th-borders: #cbd5e1;
+  --tw-prose-td-borders: #e2e8f0;
+}
+
+.pdf-print-root {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  width: 960px;
+  background: white;
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 0;
+  }
+
+  body > *:not(.pdf-print-root) {
+    display: none !important;
+  }
+
+  .pdf-print-root {
+    position: static !important;
+    left: auto !important;
+    width: 100% !important;
+  }
+
+  .pdf-print-page {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .pdf-print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .pdf-print-page canvas {
+    width: 100% !important;
+    height: auto !important;
+  }
 }

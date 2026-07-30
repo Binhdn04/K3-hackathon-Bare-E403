@@ -80,6 +80,24 @@ export async function getUploadedFile(documentId: string) {
   return { fileName, path: path.join(uploadDir, fileName) };
 }
 
+export async function deleteUploadedDocument(documentId: string) {
+  const store = await readStore();
+  const document = store.documents.find((item) => item.id === documentId);
+  if (!document) return undefined;
+
+  const uploadedFiles = (await fs.readdir(uploadDir))
+    .filter((fileName) => fileName.startsWith(`${documentId}-`));
+
+  await writeStore({
+    documents: store.documents.filter((item) => item.id !== documentId),
+    pages: store.pages.filter((item) => item.documentId !== documentId),
+    chunks: store.chunks.filter((item) => item.documentId !== documentId)
+  });
+
+  await Promise.all(uploadedFiles.map((fileName) => fs.unlink(path.join(uploadDir, fileName))));
+  return document;
+}
+
 export async function saveProcessedDocument(document: LearningDocument, pages: DocumentPage[], chunks: DocumentChunk[]) {
   const store = await readStore();
   store.documents = [...store.documents.filter((item) => item.id !== document.id), document];
