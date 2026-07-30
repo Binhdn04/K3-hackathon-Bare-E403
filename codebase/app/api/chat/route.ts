@@ -1,4 +1,5 @@
 import { answerQuestion } from "@/lib/services/ai";
+import { apiError } from "@/lib/api";
 import type { ChatContext } from "@/lib/types";
 import { NextResponse } from "next/server";
 
@@ -8,6 +9,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "question and context.courseId are required" }, { status: 400 });
   }
 
-  const message = await answerQuestion(body.question, body.context);
-  return NextResponse.json(message);
+  try {
+    return NextResponse.json(await answerQuestion(body.question, body.context));
+  } catch (error) {
+    return apiError(error);
+  }
 }

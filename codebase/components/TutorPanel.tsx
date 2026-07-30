@@ -25,6 +25,7 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
   const [tab, setTab] = useState<Tab>("tutor");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [quiz, setQuiz] = useState<QuizQuestion[]>([]);
   const [quizSource, setQuizSource] = useState<QuizOptions["source"]>("current_slide");
   const [questionCount, setQuestionCount] = useState(4);
@@ -42,6 +43,17 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
     return "Course";
   }, [context.selectedText, context.slideNumber]);
 
+  async function postJson<T>(url: string, body: unknown): Promise<T> {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const result = (await response.json()) as T & { error?: string };
+    if (!response.ok) throw new Error(result.error ?? "Request failed");
+    return result;
+  }
+
   async function sendChat(forcedQuestion?: string) {
     const question = forcedQuestion ?? input.trim();
     if (!question) return;
@@ -49,18 +61,20 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
     onMessagesChange([...messages, userMessage]);
     setInput("");
     setLoading(true);
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, context })
-    });
-    const assistant = (await response.json()) as ChatMessage;
-    onMessagesChange([...messages, userMessage, assistant]);
-    setLoading(false);
+    setError("");
+    try {
+      const assistant = await postJson<ChatMessage>("/api/chat", { question, context });
+      onMessagesChange([...messages, userMessage, assistant]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Chat failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function generateQuiz() {
     setLoading(true);
+    setError("");
     const options: QuizOptions = {
       questionCount,
       difficulty,
@@ -68,26 +82,26 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
       includeTranscript,
       source: context.selectedText ? quizSource : quizSource === "selected_text" ? "current_slide" : quizSource
     };
-    const response = await fetch("/api/quiz/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ options, context })
-    });
-    const result = (await response.json()) as { questions: QuizQuestion[] };
-    setQuiz(result.questions);
-    setLoading(false);
+    try {
+      const result = await postJson<{ questions: QuizQuestion[] }>("/api/quiz/generate", { options, context });
+      setQuiz(result.questions);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Quiz generation failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function gradeQuestion(question: QuizQuestion) {
     const answer = quizAnswers[question.id];
     if (!answer) return;
-    const response = await fetch("/api/quiz/grade", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer, question })
-    });
-    const result = (await response.json()) as { score: number; maxScore: number; feedback: { correct: string; missing: string } };
-    setGrades((current) => ({ ...current, [question.id]: result }));
+    setError("");
+    try {
+      const result = await postJson<{ score: number; maxScore: number; feedback: { correct: string; missing: string } }>("/api/quiz/grade", { answer, question });
+      setGrades((current) => ({ ...current, [question.id]: result }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Grading failed");
+    }
   }
 
   function toggleQuizType(type: QuizOptions["types"][number]) {
@@ -96,25 +110,27 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
 
   async function generateSummary(kind: string) {
     setLoading(true);
-    const response = await fetch("/api/summary/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind, context })
-    });
-    setSummary((await response.json()) as { bullets: string[]; citations: Citation[] });
-    setLoading(false);
+    setError("");
+    try {
+      setSummary(await postJson<{ bullets: string[]; citations: Citation[] }>("/api/summary/generate", { kind, context }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Summary generation failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function generateFlashcards() {
     setLoading(true);
-    const response = await fetch("/api/flashcards/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ context })
-    });
-    const result = (await response.json()) as { flashcards: Flashcard[] };
-    setFlashcards(result.flashcards);
-    setLoading(false);
+    setError("");
+    try {
+      const result = await postJson<{ flashcards: Flashcard[] }>("/api/flashcards/generate", { context });
+      setFlashcards(result.flashcards);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Flashcard generation failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -135,6 +151,7 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
         <p className="rounded border border-line bg-panel px-3 py-2 text-sm">
           <span className="font-medium">Context:</span> {contextLabel}
         </p>
+        {error ? <p className="mt-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-4">
@@ -147,6 +164,7 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
                   {message.role}
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+                {message.sourceLevel === "web" ? <p className="mt-2 text-xs font-semibold text-amber-700">Nguon Internet</p> : null}
                 <CitationList citations={message.citations ?? []} onOpenCitation={onOpenCitation} />
               </div>
             ))}

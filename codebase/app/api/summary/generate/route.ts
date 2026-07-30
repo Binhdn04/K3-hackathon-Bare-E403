@@ -1,4 +1,5 @@
 import { generateSummary } from "@/lib/services/ai";
+import { apiError } from "@/lib/api";
 import type { ChatContext } from "@/lib/types";
 import { NextResponse } from "next/server";
 
@@ -8,5 +9,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "kind and context are required" }, { status: 400 });
   }
 
-  return NextResponse.json(await generateSummary(body.kind, body.context));
+  try {
+    return NextResponse.json(await generateSummary(body.kind, body.context));
+  } catch (error) {
+    return apiError(error);
+  }
 }

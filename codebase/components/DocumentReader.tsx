@@ -11,6 +11,8 @@ type Props = {
   zoom: number;
   tab: "slide" | "transcript";
   selectedText?: string;
+  transcript: string;
+  loading?: boolean;
   onPageChange: (index: number) => void;
   onZoomChange: (zoom: number) => void;
   onTabChange: (tab: "slide" | "transcript") => void;
@@ -25,6 +27,8 @@ export function DocumentReader({
   zoom,
   tab,
   selectedText,
+  transcript,
+  loading,
   onPageChange,
   onZoomChange,
   onTabChange,
@@ -33,15 +37,7 @@ export function DocumentReader({
 }: Props) {
   const [showMenu, setShowMenu] = useState(false);
   const page = pages[pageIndex] ?? pages[0];
-  const transcript = useMemo(
-    () =>
-      [
-        "Giang vien nhan manh viec xac dinh bai toan that truoc khi chon cong nghe.",
-        "Nguon hoc lieu, slide va transcript phai duoc uu tien truoc khi dung Internet.",
-        "Moi cau tra loi nen co citation de hoc vien quay lai slide hoac doan transcript."
-      ].join("\n\n"),
-    []
-  );
+  const transcriptParagraphs = useMemo(() => transcript.split(/\n\n+/).filter(Boolean), [transcript]);
 
   function captureSelection() {
     const selection = window.getSelection()?.toString().trim() ?? "";
@@ -116,7 +112,7 @@ export function DocumentReader({
           className="mx-auto min-h-[620px] max-w-4xl rounded-md border border-line bg-white p-8 shadow-soft"
           style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
         >
-          {tab === "slide" ? (
+          {loading ? <p className="text-sm text-slate-500">Loading document...</p> : tab === "slide" ? (
             <div className="flex min-h-[540px] flex-col">
               <div className="mb-8 flex items-center justify-between border-b border-line pb-4">
                 <span className="rounded bg-emerald-100 px-3 py-1 text-sm font-medium text-brand">Slide {page?.slideNumber ?? 1}</span>
@@ -129,7 +125,8 @@ export function DocumentReader({
           ) : (
             <div className="prose max-w-none">
               <h2>Transcript - {document.chapter}</h2>
-              {transcript.split("\n\n").map((paragraph) => (
+              {transcriptParagraphs.length === 0 ? <p>No transcript was parsed for this document.</p> : null}
+              {transcriptParagraphs.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
               ))}
             </div>
@@ -152,7 +149,7 @@ export function DocumentReader({
         </span>
         <button
           type="button"
-          onClick={() => onPageChange(Math.min(pages.length - 1, pageIndex + 1))}
+          onClick={() => onPageChange(Math.max(0, Math.min(pages.length - 1, pageIndex + 1)))}
           disabled={pageIndex >= pages.length - 1}
           className="inline-flex items-center gap-2 rounded border border-line px-3 py-2 text-sm disabled:opacity-40"
         >

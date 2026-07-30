@@ -4,7 +4,9 @@ export type Citation = {
   id: string;
   type: "slide" | "transcript" | "web";
   title: string;
+  chunkId?: string;
   documentId?: string;
+  pageNumber?: number;
   slideNumber?: number;
   timestampStart?: number;
   timestampEnd?: number;
@@ -28,6 +30,19 @@ export type LearningDocument = {
   status: DocumentStatus;
   pageCount: number;
   transcript?: string;
+  transcriptText?: string;
+};
+
+export type DocumentChunk = {
+  id: string;
+  documentId: string;
+  content: string;
+  type: "slide" | "transcript";
+  pageNumber?: number;
+  slideNumber?: number;
+  startTime?: number;
+  endTime?: number;
+  embedding?: number[];
 };
 
 export type DocumentPage = {

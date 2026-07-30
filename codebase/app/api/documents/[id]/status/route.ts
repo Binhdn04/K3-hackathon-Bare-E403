@@ -1,11 +1,15 @@
-import { documents } from "@/lib/mock-data";
+import { apiError } from "@/lib/api";
+import { getDocument } from "@/lib/services/store";
 import { NextResponse } from "next/server";
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const document = documents.find((item) => item.id === params.id);
-  if (!document) {
-    return NextResponse.json({ error: "Document not found" }, { status: 404 });
-  }
+export const runtime = "nodejs";
 
-  return NextResponse.json({ id: document.id, status: document.status });
+export async function GET(_request: Request, { params }: { params: { id: string } }) {
+  try {
+    const document = await getDocument(params.id);
+    if (!document) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    return NextResponse.json({ id: document.id, status: document.status });
+  } catch (error) {
+    return apiError(error);
+  }
 }

@@ -8,6 +8,7 @@ type Props = {
   documents: LearningDocument[];
   activeDocumentId: string;
   onSelect: (documentId: string) => void;
+  onUploaded: (document: LearningDocument) => void;
 };
 
 const statusClass: Record<LearningDocument["status"], string> = {
@@ -17,33 +18,33 @@ const statusClass: Record<LearningDocument["status"], string> = {
   failed: "bg-rose-100 text-rose-800"
 };
 
-export function MaterialsColumn({ documents, activeDocumentId, onSelect }: Props) {
+export function MaterialsColumn({ documents, activeDocumentId, onSelect, onUploaded }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [localUploads, setLocalUploads] = useState<LearningDocument[]>([]);
-  const grouped = [...documents, ...localUploads].reduce<Record<string, LearningDocument[]>>((acc, document) => {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const grouped = documents.reduce<Record<string, LearningDocument[]>>((acc, document) => {
     acc[document.day] = [...(acc[document.day] ?? []), document];
     return acc;
   }, {});
 
   async function upload(file?: File) {
     if (!file) return;
+    setUploading(true);
+    setError("");
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch("/api/documents/upload", { method: "POST", body: formData });
-    const result = (await response.json()) as { id: string; title: string; status: LearningDocument["status"] };
-    setLocalUploads((current) => [
-      ...current,
-      {
-        id: result.id,
-        courseId: "course-ai-product-k3",
-        title: result.title,
-        day: "Uploaded",
-        chapter: "New material",
-        kind: file.name.endsWith(".pdf") ? "pdf" : file.name.endsWith(".pptx") ? "pptx" : file.name.endsWith(".md") ? "markdown" : "txt",
-        status: result.status,
-        pageCount: 0
-      }
-    ]);
+    formData.append("courseId", "course-ai-product-k3");
+    try {
+      const response = await fetch("/api/documents/upload", { method: "POST", body: formData });
+      const result = (await response.json()) as LearningDocument & { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Upload failed");
+      onUploaded(result);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
   }
 
   return (
@@ -63,11 +64,14 @@ export function MaterialsColumn({ documents, activeDocumentId, onSelect }: Props
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.pptx,.md,.txt"
+          accept=".pdf,.md,.markdown,.txt"
           className="hidden"
           onChange={(event) => upload(event.target.files?.[0])}
         />
       </div>
+
+      {uploading ? <p className="border-b border-line px-4 py-2 text-xs text-sky-700">Parsing and indexing...</p> : null}
+      {error ? <p className="border-b border-line px-4 py-2 text-xs text-rose-700">{error}</p> : null}
 
       <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
         {Object.entries(grouped).map(([day, items]) => (

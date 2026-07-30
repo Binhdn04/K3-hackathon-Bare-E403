@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE courses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,7 +85,9 @@ CREATE TABLE message_citations (
   message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
   type TEXT NOT NULL CHECK (type IN ('slide', 'transcript', 'web')),
   title TEXT NOT NULL,
+  chunk_id UUID REFERENCES document_chunks(id),
   document_id UUID REFERENCES documents(id),
+  page_number INTEGER,
   slide_number INTEGER,
   timestamp_start INTEGER,
   timestamp_end INTEGER,

@@ -1,169 +1,212 @@
 import type { ChatContext, ChatMessage, Citation, Flashcard, QuizOptions, QuizQuestion } from "../types";
-import {
-  searchCurrentSlide,
-  searchOtherMaterials,
-  searchSelectedText,
-  searchSlides,
-  searchTranscript,
-  searchWeb
-} from "./retrieval";
+import { openAI } from "./openai";
+import { retrieve, retrieveForGeneration } from "./retrieval";
 
-const model = "gpt-4o-mini";
+const tutorInstructions = `Ban la AI Tutor. Tra loi bang tieng Viet ro rang, ngan gon va chi dua tren SOURCE CONTEXT.
+Khong bo sung kien thuc ben ngoai context. Khi dung mot doan, ghi citation theo nhan da cung cap, vi du [Slide 3] hoac [Transcript 02:10].
+Neu context khong du, noi ro dieu gi khong the ket luan.`;
 
-function answerFromMaterial(question: string, content: string, citations: Citation[]) {
-  return `Dua tren hoc lieu, cau hoi "${question}" lien quan den: ${content.slice(0, 260)}${content.length > 260 ? "..." : ""}\n\nKet luan ngan: hay bat dau tu van de, user va bang chung tac dong truoc khi chon giai phap AI. ${renderInlineCitation(citations[0])}`;
-}
-
-function renderInlineCitation(citation?: Citation) {
-  if (!citation) return "";
-  if (citation.type === "slide") return `[Slide ${citation.slideNumber ?? "?"}]`;
-  if (citation.type === "transcript") return `[Transcript]`;
-  return `[Web]`;
+function contextWithCitations(content: string, citations: Citation[]) {
+  const labels = citations.map((citation) => {
+    const label = citation.type === "transcript"
+      ? `[Transcript ${formatTime(citation.timestampStart ?? 0)}]`
+      : `[Slide ${citation.slideNumber ?? citation.pageNumber ?? "?"}]`;
+    return `${citation.chunkId ?? citation.id} => ${label}`;
+  });
+  return `${content}\n\nCITATION LABELS:\n${labels.join("\n")}`;
 }
 
 export async function answerQuestion(question: string, context: ChatContext): Promise<ChatMessage> {
-  const selected = await searchSelectedText(question, context);
-  if (selected.isSufficient) {
-    return assistantMessage(answerFromMaterial(question, selected.content, selected.citations), selected.citations, "selected_text");
+  const found = await retrieve(question, context);
+  if (found.isSufficient) {
+    const content = await openAI.createText(tutorInstructions, `QUESTION:\n${question}\n\nSOURCE CONTEXT:\n${contextWithCitations(found.content, found.citations)}`);
+    return assistantMessage(content, found.citations, found.sourceLevel);
   }
 
-  const currentSlide = await searchCurrentSlide(question, context);
-  if (currentSlide.isSufficient) {
-    return assistantMessage(answerFromMaterial(question, currentSlide.content, currentSlide.citations), currentSlide.citations, "current_slide");
-  }
-
-  const slides = await searchSlides(question, context.courseId);
-  if (slides.isSufficient) {
-    return assistantMessage(answerFromMaterial(question, slides.content, slides.citations), slides.citations, "other_slides");
-  }
-
-  const transcript = await searchTranscript(question, context.courseId);
-  if (transcript.isSufficient) {
-    return assistantMessage(answerFromMaterial(question, transcript.content, transcript.citations), transcript.citations, "transcript");
-  }
-
-  const materials = await searchOtherMaterials(question, context.courseId);
-  if (materials.isSufficient) {
-    return assistantMessage(answerFromMaterial(question, materials.content, materials.citations), materials.citations, "other_materials");
-  }
-
-  const web = await searchWeb(question);
+  const web = await openAI.searchWeb(question);
+  const citations: Citation[] = web.sources.map((source, index) => ({
+    id: `web-${index}-${source.url}`,
+    type: "web",
+    title: `Nguon Internet: ${source.title}`,
+    url: source.url
+  }));
   return assistantMessage(
-    `Khong tim thay noi dung nay trong hoc lieu. Cau tra loi duoi day su dung nguon Internet.\n\n${web.content}`,
-    web.citations,
+    `Khong tim thay noi dung nay trong hoc lieu. Cau tra loi duoi day su dung nguon Internet.\n\n${web.text}`,
+    citations,
     "web"
   );
 }
 
-export async function generateQuiz(options: QuizOptions, context: ChatContext): Promise<QuizQuestion[]> {
-  const baseCitation: Citation = {
-    id: `quiz-source-${context.documentId ?? "course"}-${context.slideNumber ?? 0}`,
-    type: context.selectedText ? "slide" : "transcript",
-    title: context.selectedText ? `Selected text, Slide ${context.slideNumber}` : "Lesson transcript",
-    documentId: context.documentId,
-    slideNumber: context.slideNumber
-  };
+type GeneratedQuiz = {
+  questions: Array<{
+    type: QuizQuestion["type"];
+    prompt: string;
+    options: string[] | null;
+    answer: string;
+    referenceAnswer: string | null;
+    rubric: string | null;
+    points: number;
+    sourceIds: string[];
+  }>;
+};
 
-  return Array.from({ length: options.questionCount }, (_, index) => {
-    const type = options.types[index % options.types.length] ?? "multiple_choice";
-    return {
-      id: `q-${Date.now()}-${index}`,
-      type,
-      prompt:
-        type === "short_answer"
-          ? "Giai thich vi sao can xac dinh dung bai toan truoc khi chon giai phap AI."
-          : "Dau la buoc nen lam truoc khi build AI tutor?",
-      options: type === "multiple_choice" ? ["Chon model lon nhat", "Xac dinh user va pain point", "Viet prompt that dai", "Bo qua citation"] : undefined,
-      answer: type === "true_false" ? "true" : "Xac dinh user va pain point",
-      referenceAnswer:
-        type === "short_answer"
-          ? "Can xac dinh dung user, pain point, tan suat va tac dong de tranh build giai phap khong giai quyet van de that."
-          : undefined,
-      rubric: type === "short_answer" ? "2 diem: neu du user/pain point/tac dong. 1 diem: neu chi noi chung ve van de." : undefined,
-      points: type === "short_answer" ? 2 : 1,
-      feedback:
-        type === "short_answer"
-          ? {
-              correct: "Neu cau tra loi noi ro ve van de that va bang chung tac dong.",
-              missing: "Thieu neu khong de cap user hoac cach do chat luong."
+export async function generateQuiz(options: QuizOptions, context: ChatContext): Promise<QuizQuestion[]> {
+  const found = await retrieveForGeneration(context, options.source);
+  if (!found.isSufficient) throw new Error("No material is available for this quiz");
+  const result = await openAI.createJson<GeneratedQuiz>(
+    "Tao quiz bang tieng Viet chi tu hoc lieu. Cau hoi phai co dap an ro rang. sourceIds chi chua ID nam trong context.",
+    `OPTIONS: ${JSON.stringify(options)}\n\nCONTEXT:\n${found.content}`,
+    "quiz",
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["questions"],
+      properties: {
+        questions: {
+          type: "array",
+          minItems: options.questionCount,
+          maxItems: options.questionCount,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["type", "prompt", "options", "answer", "referenceAnswer", "rubric", "points", "sourceIds"],
+            properties: {
+              type: { type: "string", enum: options.types },
+              prompt: { type: "string" },
+              options: { type: ["array", "null"], items: { type: "string" } },
+              answer: { type: "string" },
+              referenceAnswer: { type: ["string", "null"] },
+              rubric: { type: ["string", "null"] },
+              points: { type: "integer", minimum: 1, maximum: 10 },
+              sourceIds: { type: "array", items: { type: "string" }, minItems: 1 }
             }
-          : undefined,
-      citations: [baseCitation]
-    };
-  });
+          }
+        }
+      }
+    }
+  );
+  return result.questions.map((question) => ({
+    id: crypto.randomUUID(),
+    type: question.type,
+    prompt: question.prompt,
+    options: question.options ?? undefined,
+    answer: question.answer,
+    referenceAnswer: question.referenceAnswer ?? undefined,
+    rubric: question.rubric ?? undefined,
+    points: question.points,
+    citations: mapCitations(question.sourceIds, found.citations)
+  }));
 }
 
 export async function gradeQuiz(answer: string, question: QuizQuestion) {
-  const normalized = answer.toLowerCase();
-  const expected = question.answer.toLowerCase();
-  const score = normalized.includes(expected) || expected.includes(normalized) ? question.points : Math.max(0, question.points - 1);
-
+  const result = await openAI.createJson<{
+    score: number;
+    correct: string;
+    missing: string;
+  }>(
+    "Cham bai bang tieng Viet theo dap an va rubric. Khong cho diem vuot maxScore.",
+    JSON.stringify({ answer, expectedAnswer: question.answer, referenceAnswer: question.referenceAnswer, rubric: question.rubric, maxScore: question.points }),
+    "quiz_grade",
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["score", "correct", "missing"],
+      properties: {
+        score: { type: "number", minimum: 0, maximum: question.points },
+        correct: { type: "string" },
+        missing: { type: "string" }
+      }
+    }
+  );
   return {
-    model,
-    score,
+    model: openAI.model,
+    score: Math.min(question.points, Math.max(0, result.score)),
     maxScore: question.points,
-    feedback: {
-      correct: score > 0 ? "Cau tra loi cham dung y chinh." : "Cau tra loi co lien quan den chu de.",
-      missing: score === question.points ? "Khong thieu y quan trong." : "Can neu ro hon user, pain point hoac citation nguon."
-    },
+    feedback: { correct: result.correct, missing: result.missing },
     citations: question.citations
   };
 }
 
 export async function generateSummary(kind: string, context: ChatContext) {
-  const citation: Citation = {
-    id: `summary-${context.documentId ?? "course"}-${context.slideNumber ?? 0}`,
-    type: "slide",
-    title: `Slide ${context.slideNumber ?? "current"}`,
-    documentId: context.documentId,
-    slideNumber: context.slideNumber
-  };
-
-  const label = kind.replaceAll("_", " ");
-  return {
-    model,
-    bullets: [
-      `${label}: Bat dau tu user va pain point ro rang. [Slide ${context.slideNumber ?? "?"}]`,
-      "Dung hoc lieu hien tai lam nguon uu tien truoc khi mo rong sang transcript hoac web.",
-      "Moi ket luan can co citation de hoc vien quay lai nguon goc."
-    ],
-    citations: [citation]
-  };
+  const found = await retrieveForGeneration(context, kind);
+  if (!found.isSufficient) throw new Error("No material is available to summarize");
+  const result = await openAI.createJson<{ bullets: Array<{ text: string; sourceIds: string[] }> }>(
+    "Tom tat bang tieng Viet, bullet ngan gon, chi dung context. Moi bullet phai tro den sourceIds that trong context.",
+    `SUMMARY TYPE: ${kind}\n\nCONTEXT:\n${found.content}`,
+    "summary",
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["bullets"],
+      properties: {
+        bullets: {
+          type: "array",
+          minItems: 2,
+          maxItems: 10,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["text", "sourceIds"],
+            properties: {
+              text: { type: "string" },
+              sourceIds: { type: "array", items: { type: "string" }, minItems: 1 }
+            }
+          }
+        }
+      }
+    }
+  );
+  const ids = result.bullets.flatMap((bullet) => bullet.sourceIds);
+  return { model: openAI.model, bullets: result.bullets.map((bullet) => bullet.text), citations: mapCitations(ids, found.citations) };
 }
 
 export async function generateFlashcards(context: ChatContext): Promise<Flashcard[]> {
-  const citation: Citation = {
-    id: `flashcard-${context.documentId ?? "course"}-${context.slideNumber ?? 0}`,
-    type: "slide",
-    title: `Slide ${context.slideNumber ?? "current"}`,
-    documentId: context.documentId,
-    slideNumber: context.slideNumber
-  };
-
-  return [
+  const scope = context.selectedText ? "selected_text" : "current_slide";
+  const found = await retrieveForGeneration(context, scope);
+  if (!found.isSufficient) throw new Error("No material is available for flashcards");
+  const result = await openAI.createJson<{ cards: Array<{ front: string; back: string; sourceId: string }> }>(
+    "Tao 3-6 flashcard bang tieng Viet chi tu context. sourceId phai la ID that trong context.",
+    found.content,
+    "flashcards",
     {
-      id: "fc-problem-first",
-      front: "Vi sao AI tutor phai uu tien hoc lieu truoc Internet?",
-      back: "De cau tra loi bam sat bai hoc, giam hallucination va giu citation ve nguon hoc tap.",
-      source: citation,
-      status: "new"
-    },
-    {
-      id: "fc-double-diamond",
-      front: "Double Diamond dung de lam gi?",
-      back: "Mo rong va hoi tu qua problem discovery/definition, sau do solution discovery/delivery.",
-      source: citation,
-      status: "new"
+      type: "object",
+      additionalProperties: false,
+      required: ["cards"],
+      properties: {
+        cards: {
+          type: "array",
+          minItems: 3,
+          maxItems: 6,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["front", "back", "sourceId"],
+            properties: { front: { type: "string" }, back: { type: "string" }, sourceId: { type: "string" } }
+          }
+        }
+      }
     }
-  ];
+  );
+  return result.cards.map((card) => ({
+    id: crypto.randomUUID(),
+    front: card.front,
+    back: card.back,
+    source: mapCitations([card.sourceId], found.citations)[0] ?? found.citations[0],
+    status: "new"
+  }));
+}
+
+function mapCitations(ids: string[], citations: Citation[]) {
+  const wanted = new Set(ids);
+  const matched = citations.filter((citation) => wanted.has(citation.chunkId ?? citation.id));
+  return matched.length > 0 ? matched : citations.slice(0, 2);
 }
 
 function assistantMessage(content: string, citations: Citation[], sourceLevel: ChatMessage["sourceLevel"]): ChatMessage {
-  return {
-    id: `assistant-${Date.now()}`,
-    role: "assistant",
-    content,
-    citations,
-    sourceLevel
-  };
+  return { id: crypto.randomUUID(), role: "assistant", content, citations, sourceLevel };
+}
+
+function formatTime(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }

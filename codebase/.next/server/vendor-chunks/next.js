@@ -1954,6 +1954,16 @@ eval("(()=>{\"use strict\";var e={491:(e,t,r)=>{Object.defineProperty(t,\"__esMo
 
 /***/ }),
 
+/***/ "(rsc)/./node_modules/next/dist/compiled/server-only/empty.js":
+/*!**************************************************************!*\
+  !*** ./node_modules/next/dist/compiled/server-only/empty.js ***!
+  \**************************************************************/
+/***/ (() => {
+
+
+
+/***/ }),
+
 /***/ "(rsc)/./node_modules/next/dist/compiled/ua-parser-js/ua-parser.js":
 /*!*******************************************************************!*\
   !*** ./node_modules/next/dist/compiled/ua-parser-js/ua-parser.js ***!

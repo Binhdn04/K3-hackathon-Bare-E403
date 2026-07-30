@@ -1,4 +1,5 @@
 import { generateFlashcards } from "@/lib/services/ai";
+import { apiError } from "@/lib/api";
 import type { ChatContext } from "@/lib/types";
 import { NextResponse } from "next/server";
 
@@ -8,5 +9,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "context.courseId is required" }, { status: 400 });
   }
 
-  return NextResponse.json({ flashcards: await generateFlashcards(body.context) });
+  try {
+    return NextResponse.json({ flashcards: await generateFlashcards(body.context) });
+  } catch (error) {
+    return apiError(error);
+  }
 }

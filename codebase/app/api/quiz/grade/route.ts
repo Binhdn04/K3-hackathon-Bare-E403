@@ -1,4 +1,5 @@
 import { gradeQuiz } from "@/lib/services/ai";
+import { apiError } from "@/lib/api";
 import type { QuizQuestion } from "@/lib/types";
 import { NextResponse } from "next/server";
 
@@ -8,5 +9,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "answer and question are required" }, { status: 400 });
   }
 
-  return NextResponse.json(await gradeQuiz(body.answer, body.question));
+  try {
+    return NextResponse.json(await gradeQuiz(body.answer, body.question));
+  } catch (error) {
+    return apiError(error);
+  }
 }
