@@ -157,8 +157,9 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
 | Thời điểm | Đổi gì | Vì sao (trỏ về feedback/case nào) |
 |---|---|---|
 | 2026-07-30 | Tạo spec cho lát cắt toàn bộ file đang mở | Repo chưa có `spec.md`; chốt phạm vi theo implementation hiện tại và template chương trình. |
-| 2026-07-30 | Thêm scope `entire_document`, lọc citation theo trang được nhắc | Case tóm tắt toàn bộ file và yêu cầu chỉ đưa nguồn liên quan trong `../eval/golden-set.md`; tránh hiển thị toàn bộ deck. |
-| 2026-07-30 | Quiz chỉ Multiple Choice; Grade local `1/1` hoặc `0/1`; ẩn reference/citation trước Grade | Yêu cầu sản phẩm: bỏ True/False/Short Answer, tránh lộ đáp án/căn cứ khi làm và giảm độ trễ chấm. |
-| 2026-07-30 | Bỏ nút Chưa nhớ/Khó/Đã nhớ khỏi Flashcard | Yêu cầu sản phẩm; spaced-repetition không thuộc non-goals MVP. |
+| 2026-07-30 | Thêm scope `entire_document`, lọc citation theo trang được nhắc | Feedback của Linh: citation còn thừa, chưa thật sự chuẩn; đồng thời đáp ứng case trong `../eval/golden-set.md`. |
+| 2026-07-30 | Quiz chỉ Multiple Choice; Grade local `1/1` hoặc `0/1`; ẩn reference/citation trước Grade | Feedback của Việt Anh: đáp án đúng quá dễ đoán; điều chỉnh prompt sinh quiz và ẩn căn cứ trước khi chấm để tăng chất lượng trải nghiệm. |
+| 2026-07-30 | Bổ sung chế độ hỏi đáp theo slide đang chọn hoặc nhóm slide chỉ định | Feedback của Huy: chatbot chưa hỗ trợ ngữ cảnh theo các slide chỉ định. |
+| 2026-07-30 | Bỏ nút Chưa nhớ/Khó/Đã nhớ khỏi Flashcard | Giữ MVP đơn giản, tập trung vào tính năng được người dùng đánh giá hữu ích (feedback của Bảo); spaced-repetition không thuộc non-goals MVP. |
 
 
