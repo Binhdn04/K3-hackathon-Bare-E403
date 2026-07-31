@@ -2,7 +2,7 @@
 
 import { CitationList } from "@/components/CitationList";
 import type { ChatContext, ChatMessage, Citation, Flashcard, QuizOptions, QuizQuestion } from "@/lib/types";
-import { BookOpen, Bot, LoaderCircle, MessageSquareText, Send, Sparkles } from "lucide-react";
+import { BookOpen, Bot, Globe2, LoaderCircle, MessageSquareText, Send, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type Props = {
@@ -21,15 +21,21 @@ const tabs: Array<{ id: Tab; label: string }> = [
   { id: "flashcard", label: "Flashcard" }
 ];
 
+function normalizeQuestionCount(value: string) {
+  const parsedValue = Number.parseInt(value, 10);
+  return Number.isFinite(parsedValue) ? Math.min(10, Math.max(1, parsedValue)) : 1;
+}
+
 export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation, onContextScopeChange }: Props) {
   const [tab, setTab] = useState<Tab>("tutor");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [webFallbackMessageId, setWebFallbackMessageId] = useState("");
   const [generatingQuiz, setGeneratingQuiz] = useState(false);
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
   const [error, setError] = useState("");
   const [quiz, setQuiz] = useState<QuizQuestion[]>([]);
-  const [questionCount, setQuestionCount] = useState(4);
+  const [questionCount, setQuestionCount] = useState("4");
   const [difficulty, setDifficulty] = useState<QuizOptions["difficulty"]>("medium");
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [grades, setGrades] = useState<Record<string, { feedback: { correct: string; missing: string } }>>({});
@@ -53,29 +59,52 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
     return result;
   }
 
-  async function sendChat(forcedQuestion?: string) {
-    const question = forcedQuestion ?? input.trim();
+  async function sendChat(options?: {
+    question?: string;
+    allowWebFallback?: boolean;
+    appendUserMessage?: boolean;
+    replaceMessageId?: string;
+  }) {
+    const question = options?.question ?? input.trim();
     if (!question) return;
-    const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: "user", content: question };
-    onMessagesChange([...messages, userMessage]);
-    setInput("");
+    const appendUserMessage = options?.appendUserMessage !== false;
+    const conversation = appendUserMessage
+      ? [...messages, { id: `user-${Date.now()}`, role: "user" as const, content: question }]
+      : messages;
+    if (appendUserMessage) {
+      onMessagesChange(conversation);
+      setInput("");
+    }
+    if (options?.replaceMessageId) setWebFallbackMessageId(options.replaceMessageId);
     setLoading(true);
     setError("");
     try {
-      const assistant = await postJson<ChatMessage>("/api/chat", { question, context });
-      onMessagesChange([...messages, userMessage, assistant]);
+      const assistant = await postJson<ChatMessage>("/api/chat", {
+        question,
+        context: {
+          ...context,
+          allowWebFallback: options?.allowWebFallback === true
+        }
+      });
+      const completedConversation = options?.replaceMessageId
+        ? conversation.filter((message) => message.id !== options.replaceMessageId)
+        : conversation;
+      onMessagesChange([...completedConversation, assistant]);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Chat failed");
     } finally {
       setLoading(false);
+      if (options?.replaceMessageId) setWebFallbackMessageId("");
     }
   }
 
   async function generateQuiz() {
     setGeneratingQuiz(true);
     setError("");
+    const normalizedQuestionCount = normalizeQuestionCount(questionCount);
+    setQuestionCount(String(normalizedQuestionCount));
     const options: QuizOptions = {
-      questionCount,
+      questionCount: normalizedQuestionCount,
       difficulty,
       types: ["multiple_choice"]
     };
@@ -206,9 +235,27 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
                   <MessageSquareText size={13} />
                   {message.role}
                 </div>
-                <p className="whitespace-pre-wrap text-sm leading-6 text-[#edf3ff]">{message.content}</p>
+                <p className="whitespace-pre-wrap text-sm leading-6 text-[#edf3ff]">{displayMessageContent(message)}</p>
                 {message.sourceLevel === "web" ? <p className="mt-2 text-xs font-semibold text-amber-300">Nguồn Internet</p> : null}
-                <CitationList citations={message.citations ?? []} onOpenCitation={onOpenCitation} />
+                {message.requiresWebFallback && message.fallbackQuestion ? (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void sendChat({
+                      question: message.fallbackQuestion,
+                      allowWebFallback: true,
+                      appendUserMessage: false,
+                      replaceMessageId: message.id
+                    })}
+                    className="web-fallback-button mt-3 inline-flex items-center gap-2 rounded-xl border border-[#0d7198] bg-[#082c4e] px-3 py-2 text-xs font-semibold text-[#66ddff] hover:border-[#00aee8] disabled:cursor-wait disabled:opacity-50"
+                  >
+                    {webFallbackMessageId === message.id
+                      ? <LoaderCircle className="animate-spin" size={14} />
+                      : <Globe2 size={14} />}
+                    Hỏi AI với Internet
+                  </button>
+                ) : null}
+                <CitationList citations={displayMessageCitations(message)} onOpenCitation={onOpenCitation} />
               </div>
             ))}
             {messages.length === 0 ? (
@@ -237,7 +284,8 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
                   min={1}
                   max={10}
                   value={questionCount}
-                  onChange={(event) => setQuestionCount(Number(event.target.value))}
+                  onChange={(event) => setQuestionCount(event.target.value)}
+                  onBlur={() => setQuestionCount(String(normalizeQuestionCount(questionCount)))}
                   className="w-full rounded-xl border border-[#30425f] bg-[#0d1830] px-2 py-1.5 text-[#f4f7ff] outline-none focus:border-[#00aee8]"
                 />
               </label>
@@ -341,10 +389,20 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                if (!loading && input.trim()) void sendChat();
+              }}
               className="min-h-12 flex-1 resize-none rounded-2xl border border-[#30425f] bg-[#0d1830] p-3 text-sm text-[#f4f7ff] outline-none placeholder:text-[#607190] focus:border-[#00aee8]"
               placeholder="Nhập câu hỏi hoặc bôi đen tài liệu..."
             />
-            <button type="submit" className="vlearn-send-button inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#0d7198] bg-[#082c4e] text-[#66ddff] hover:border-[#00aee8]" title="Gửi">
+            <button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="vlearn-send-button inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#0d7198] bg-[#082c4e] text-[#66ddff] hover:border-[#00aee8] disabled:cursor-not-allowed disabled:opacity-50"
+              title="Gửi"
+            >
               <Send size={17} />
             </button>
           </div>
@@ -356,6 +414,24 @@ export function TutorPanel({ context, messages, onMessagesChange, onOpenCitation
 
 function normalizeAnswer(value: string) {
   return value.normalize("NFKC").trim().toLocaleLowerCase("vi").replace(/\s+/g, " ");
+}
+
+function displayMessageContent(message: ChatMessage) {
+  if (message.sourceLevel !== "web") return message.content;
+  return message.content
+    .replace(
+      /^Khong tim thay noi dung nay trong hoc lieu\. Cau tra loi duoi day su dung nguon Internet\.\s*/i,
+      ""
+    )
+    .trim();
+}
+
+function displayMessageCitations(message: ChatMessage) {
+  return (message.citations ?? []).map((citation) => (
+    citation.type === "web"
+      ? { ...citation, title: citation.title.replace(/^Nguon Internet:\s*/i, "") }
+      : citation
+  ));
 }
 
 function isCorrectMultipleChoice(selected: string, expected: string, options: string[]) {
