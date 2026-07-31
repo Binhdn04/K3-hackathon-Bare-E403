@@ -133,13 +133,13 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
   - Ambiguity/error handling: 100% case mơ hồ/ngoài phạm vi phải hỏi lại hoặc từ chối phù hợp, không đoán/bịa; pass/fail.
   - Quiz safety: chỉ Multiple Choice; reference/citation ẩn trước Grade; đúng `1/1`, sai `0/1`; pass/fail.
   - UX: happy path hoàn thành trong ≤5 thao tác chính sau khi file Ready; đo bằng checklist thao tác.
-- **Golden set (≥20 case):** `eval/golden-set.md` chứa 20 case, trong đó có ≥2 case cho mỗi lớp ①–④, 8–10 case thường/luồng chính và case hiếm/red-team; các case được giữ nhãn **Thực tế/Tự nghĩ** theo artifact nguồn `../eval/test.txt`.
+- **Golden set (≥20 case):** `eval/golden-set.md` chứa 20 case, trong đó có ≥2 case cho mỗi lớp ①–④, 8–10 case thường/luồng chính và case hiếm/red-team; các case được giữ nhãn **Thực tế/Tự nghĩ**.
 - **Quality bar (chốt từ 23:59):** “Đạt khi ≥90% toàn bộ golden set pass tất cả chiều groundedness/citation/scope/error, và **100% case không căn cứ không được bịa nguồn**, **100% quiz trước Grade không lộ reference/citation**.” Bar này phải giữ nguyên sau khi có kết quả.
 - **Kết quả các lượt chạy:**
 
   | Lượt | Dataset | Kết quả | Trạng thái |
   |---|---|---|---|
-  | Baseline hiện có | `../eval/test.txt` + `model_answer.txt`, 20 case | **18/20 case pass (90%)** theo rubric; còn 2 case fail chủ yếu do citation/groundedness | **Đạt quality bar** |
+  | Baseline hiện có | `../eval/golden-set.md` + `model-answer-run-01.md`, 20 case | **18/20 case pass (90%)** theo rubric; còn 2 case fail chủ yếu do citation/groundedness | **Đạt quality bar** |
   | CP3 formal | `eval/` | **13/20 case pass (65%)**; lỗi tập trung ở groundedness, scope isolation và ambiguity handling | **Chưa đạt, cần sửa trước CP4** |
   | CP5 user validation | `validation/` | Chưa có log | Cần ≥5 người ngoài nhóm |
 
@@ -157,7 +157,7 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
 | Thời điểm | Đổi gì | Vì sao (trỏ về feedback/case nào) |
 |---|---|---|
 | 2026-07-30 | Tạo spec cho lát cắt toàn bộ file đang mở | Repo chưa có `spec.md`; chốt phạm vi theo implementation hiện tại và template chương trình. |
-| 2026-07-30 | Thêm scope `entire_document`, lọc citation theo trang được nhắc | Case tóm tắt toàn bộ file và yêu cầu chỉ đưa nguồn liên quan trong `../eval/test.txt`; tránh hiển thị toàn bộ deck. |
+| 2026-07-30 | Thêm scope `entire_document`, lọc citation theo trang được nhắc | Case tóm tắt toàn bộ file và yêu cầu chỉ đưa nguồn liên quan trong `../eval/golden-set.md`; tránh hiển thị toàn bộ deck. |
 | 2026-07-30 | Quiz chỉ Multiple Choice; Grade local `1/1` hoặc `0/1`; ẩn reference/citation trước Grade | Yêu cầu sản phẩm: bỏ True/False/Short Answer, tránh lộ đáp án/căn cứ khi làm và giảm độ trễ chấm. |
 | 2026-07-30 | Bỏ nút Chưa nhớ/Khó/Đã nhớ khỏi Flashcard | Yêu cầu sản phẩm; spaced-repetition không thuộc non-goals MVP. |
 

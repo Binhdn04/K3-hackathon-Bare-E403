@@ -10,6 +10,17 @@
 **Lê Trung Hiếu - 2A202601917** - khảo sát các bạn học viên, UI, viết evidence.  
 **Bùi Duy Hải - 2A202601878** - check data trong chatlog, tạo data để test, demo.  
 
+## Quick start
+
+```bash
+cp .env.example .env.local
+# Set OPENAI_API_KEY in .env.local
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
 ## Bắt đầu từ đâu?
 
 1. Đọc **`01-de-bai.md`** để chọn hướng và hiểu tiêu chí.
